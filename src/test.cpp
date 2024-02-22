@@ -6,7 +6,7 @@
 /*   By: abettini <abettini@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/12/05 09:48:38 by abettini          #+#    #+#             */
-/*   Updated: 2024/02/22 12:19:51 by abettini         ###   ########.fr       */
+/*   Updated: 2024/02/22 15:51:27 by abettini         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -90,7 +90,7 @@ int main()
                 else
                 {
                     char buffer[1024];
-                    memset(buffer, '\0', 1024 - 1);
+                    memset(buffer, '\0', sizeof(buffer));
                     ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
                     if (bytesRead == -1) {
                         std::cerr << "Error receiving data" << std::endl;

@@ -10,11 +10,13 @@
 
 Server::Server(void)
 {
-
+	this->_port = 6667;
 }
 
 Server::~Server(void)
 {
+	close(this->_serverSocket);
+
 	for (std::map<std::string, Channel *>::iterator it = this->_channels.begin(); it != this->_channels.end(); ++it) {
 		delete (it->second);
 	}
@@ -83,58 +85,70 @@ void	Server::start(void)
     }
 }
 
+void	Server::newConnection(void)
+{
+	int clientSocket = accept(_serverSocket, nullptr, nullptr);
+	if (clientSocket == -1) {
+		std::cerr << "Connection error" << std::endl;
+		return ;
+	}
+	
+	std::cout << "New connection accepted" << std::endl;
+	Client * newClient = new Client(clientSocket);
+	this->addClient(newClient);
+
+	//prompt?
+}
+
+/* void Server::dealMessage(int clientFd)
+{
+    char			buffer[1024];
+    std::string		msg;
+
+    ssize_t bytesRead = recv(clientFd, buffer, sizeof(buffer) - 1, 0);
+    if (bytesRead == -1) {
+        std::cerr << "Error receiving data" << std::endl;
+    }
+    else if (bytesRead == 0) {
+        std::cout << "Connection closed by client" << std::endl;
+        close(clientFd);
+    }
+    else {
+        //std::cout << "Received " << bytesRead << " bytes: " << buffer << std::endl;
+		msg += buffer;
+		if (msg.find('\n') != std::string::npos) {
+			std::cout << msg << std::endl;
+			if (msg == "exit\n") {
+				close(_serverSocket);
+				throw (std::exception());
+			}
+			msg.clear();
+    }
+} */
+
 void	Server::loop(void)
 {
 	std::vector<pollfd> fds;
     fds.push_back({_serverSocket, POLLIN, 0});
+    
+
+	pollfd	serverPollFd;
+	serverPollFd.fd = _serverSocket;
+	serverPollFd.events = POLLIN;
+	serverPollFd.revents = 0;
+	
 
 	std::string msg;
-    while (true)
-    {
-        int numready = poll(fds.data(), fds.size(), -1);
-        for (size_t i = 0; i < fds.size(); ++i)
-        {
-            if (fds[i].revents & POLLIN)
-            {
-                if (fds[i].fd == _serverSocket)
-                {
-                    int clientSocket = accept(_serverSocket, nullptr, nullptr);
-                    if (clientSocket != -1)
-                    {
-                        std::cout << "New connection accepted" << std::endl;
-                        fds.push_back({clientSocket, POLLIN, 0}); // Add the new client socket to the poll set
-                        //std::string reply = "test msg";
-                        //send(clientSocket, reply.c_str(), reply.length(), 0);
-                    }
+    while (true) {
+        //int numready = poll(fds.data(), fds.size(), -1);
+		int numready = poll(&serverPollFd, nClients() + 1, -1);
+		for (std::map<std::string, Client *>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
+            if (it->second->getRevents() & POLLIN) {
+                if (it->second->getFd() == _serverSocket) {
+                    this->newConnection();
                 }
-                else
-                {
-                    char buffer[1024];
-                    memset(buffer, '\0', 1024 - 1);
-                    ssize_t bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
-                    if (bytesRead == -1) {
-                        std::cerr << "Error receiving data" << std::endl;
-                    }
-                    else if (bytesRead == 0) {
-                        std::cout << "Connection closed by client" << std::endl;
-                        close(fds[i].fd);
-                        fds.erase(fds.begin() + i);
-                        --i;
-                    }
-                    else {
-                        //std::cout << "Received " << bytesRead << " bytes: " << buffer << std::endl;
-                        msg += buffer;
-                        if (msg.find('\n') != std::string::npos)
-                        {
-                            std::cout << msg << std::endl;
-                            if (msg == "exit\n")
-                            {
-                                close(_serverSocket);
-                                throw (std::exception());
-                            }
-                            msg.clear();
-                        }
-                    }
+                else {
+					this->dealMessage();
                 }
             }
         }
@@ -201,7 +215,7 @@ void	Server::removeChannel(const std::string & channelName)
 void	Server::createClient(int fd, const std::string & clientName)
 {
 	if (this->_channels.find(clientName) == this->_channels.end()) {
-		Client * newClient = new Client(fd, clientName);
+		Client * newClient = new Client(fd);
 		this->addClient(newClient);
 	}
 	else {
@@ -211,8 +225,8 @@ void	Server::createClient(int fd, const std::string & clientName)
 
 void	Server::addClient(Client * client)
 {
-	if (client && this->_clients.find(client->getName()) == this->_clients.end()) {
-		this->_clients.insert(std::make_pair(client->getName(), client));
+	if (client && this->_clients.find(client->getUserName()) == this->_clients.end()) {
+		this->_clients.insert(std::make_pair(client->getUserName(), client));
 	}
 }
 

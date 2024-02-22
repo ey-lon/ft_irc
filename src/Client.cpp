@@ -11,21 +11,38 @@ Client::~Client()
 
 }
 
-Client::Client(int fd, const std::string & clientName) : _fd(fd), _name(clientName)
+Client::Client(int fd)
 {
-
+	_pollFd.fd = fd;
+	_pollFd.events = POLLIN;
+	_pollFd.revents = 0;
 }
 
 //getters
 
 int	Client::getFd() const
 {
-	return (this->_fd);
+	return (this->_pollFd.fd);
 }
 
-const std::string &	Client::getName() const
+short	Client::getEvents() const
 {
-	return (this->_name);
+	return (this->_pollFd.events);
+}
+
+short	Client::getRevents() const
+{
+	return (this->_pollFd.revents);
+}
+
+const std::string &	Client::getUserName() const
+{
+	return (this->_userName);
+}
+
+const std::string &	Client::getNickName() const
+{
+	return (this->_nickName);
 }
 
 bool	Client::isClientInChannel(std::string channelName) const
@@ -38,7 +55,7 @@ bool	Client::isClientAdmin(std::string channelName) const
 	std::map<std::string, Channel *>::const_iterator it = this->_channels.find(channelName);
 
 	if (it != this->_channels.end()) {
-		return (it->second->isClientAdmin(this->_name));
+		return (it->second->isClientAdmin(this->_userName));
 	}
 	return (false);
 }

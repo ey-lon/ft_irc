@@ -14,6 +14,7 @@ int main()
 		Server server;
 
 		server.start();
+		server.loop();
 	}
 	catch (std::exception &) {
 		std::cerr << "Error" << std::endl;

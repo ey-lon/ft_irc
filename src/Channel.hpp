@@ -1,5 +1,3 @@
-
-
 #include <map>
 #include <iostream>
 
@@ -23,18 +21,17 @@ class Channel
 		~Channel(void);
 
 		Channel(const std::string & channelName);
-
+		
 		//getters
 		const std::string	getName(void) const;
 		bool				isInviteOnly(void) const;
 
-		bool				isClientInChannel(const std::string & clientName) const;
-		bool				isClientAdmin(const std::string & clientName) const;
+		bool				isClientInChannel(const std::string & clientUserName) const;
+		bool				isClientAdmin(const std::string & clientUserName) const;
 
 		//
 		void				addClient(Client *client);
-		void				removeClient(const std::string & clientName);
-		void				promoteClient(const std::string & clientName);
-		void				demoteClient(const std::string & clientName);
+		void				removeClient(const std::string & clientUserName);
+		void				promoteClient(const std::string & clientUserName);
+		void				demoteClient(const std::string & clientUserName);
 };
-

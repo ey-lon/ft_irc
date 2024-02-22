@@ -1,24 +1,30 @@
 #include <iostream>
 #include <map>
+#include <poll.h>
 
 class Channel;
 
 class Client
 {
 	private:
-		int									_fd;
-		std::string							_name;
+		pollfd								_pollFd;
+		std::string							_userName;
+		std::string							_nickName;
 		std::map<std::string, Channel *>	_channels;
 
 	public:
 		Client(void);
 		~Client(void);
 
-		Client(int fd, const std::string & clientName);
+		Client(int fd);
 
 		//getters
 		int					getFd() const;
-		const std::string &	getName() const;
+		short				getEvents() const;
+		short				getRevents() const;
+		
+		const std::string &	getUserName() const;
+		const std::string &	getNickName() const;
 
 		bool				isClientInChannel(std::string channelName) const;
 		bool				isClientAdmin(std::string channelName) const;

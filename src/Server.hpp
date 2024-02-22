@@ -26,6 +26,9 @@ class Server
 		void				start(void);
 		void				loop(void);
 
+		void				newConnection(void);
+		void				dealMessage(void);
+
 		//getters
 		const std::string &	getPassword(void) const;
 		int					getPort(void) const;

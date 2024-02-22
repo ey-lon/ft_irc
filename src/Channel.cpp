@@ -31,14 +31,14 @@ bool	Channel::isInviteOnly(void) const
 	return (this->_isInviteOnly);
 }
 
-bool	Channel::isClientInChannel(const std::string & clientName) const
+bool	Channel::isClientInChannel(const std::string & clientUserName) const
 {
-	return (this->_clients.find(clientName) != this->_clients.end());
+	return (this->_clients.find(clientUserName) != this->_clients.end());
 }
 
-bool	Channel::isClientAdmin(const std::string & clientName) const
+bool	Channel::isClientAdmin(const std::string & clientUserName) const
 {
-	std::map<std::string, t_client *>::const_iterator it = this->_clients.find(clientName);
+	std::map<std::string, t_client *>::const_iterator it = this->_clients.find(clientUserName);
 
 	if (it != this->_clients.end()) {
 		return (it->second->isAdmin);
@@ -50,37 +50,37 @@ bool	Channel::isClientAdmin(const std::string & clientName) const
 
 void	Channel::addClient(Client * client)
 {
-	if (client && this->_clients.find(client->getName()) == this->_clients.end())
+	if (client && this->_clients.find(client->getUserName()) == this->_clients.end())
 	{
 		t_client * newClient = new t_client;
 		newClient->client = client;
 		newClient->isAdmin = false;
-		this->_clients.insert(std::make_pair(client->getName(), newClient));
+		this->_clients.insert(std::make_pair(client->getUserName(), newClient));
 	}
 }
 
-void	Channel::removeClient(const std::string & clientName)
+void	Channel::removeClient(const std::string & clientUserName)
 {
-	if (this->_clients.find(clientName) != this->_clients.end())
+	if (this->_clients.find(clientUserName) != this->_clients.end())
 	{
-		this->_clients[clientName]->client->removeChannel(this->_name);
-		delete (this->_clients[clientName]);
-		this->_clients.erase(clientName);
+		this->_clients[clientUserName]->client->removeChannel(this->_name);
+		delete (this->_clients[clientUserName]);
+		this->_clients.erase(clientUserName);
 	}
 }
 
-void	Channel::promoteClient(const std::string & clientName)
+void	Channel::promoteClient(const std::string & clientUserName)
 {
-	if (this->_clients.find(clientName) != this->_clients.end())
+	if (this->_clients.find(clientUserName) != this->_clients.end())
 	{
-		this->_clients[clientName]->isAdmin = true;
+		this->_clients[clientUserName]->isAdmin = true;
 	}
 }
 
-void	Channel::demoteClient(const std::string & clientName)
+void	Channel::demoteClient(const std::string & clientUserName)
 {
-	if (this->_clients.find(clientName) != this->_clients.end())
+	if (this->_clients.find(clientUserName) != this->_clients.end())
 	{
-		this->_clients[clientName]->isAdmin = false;
+		this->_clients[clientUserName]->isAdmin = false;
 	}
 }
