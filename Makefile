@@ -18,7 +18,7 @@ OBJ_F = obj/
 SRC =	main.cpp \
 		Server.cpp \
 		Channel.cpp \
-		Client.cpp
+		User.cpp
 
 #----------------------------------------------
 #OBJECT FILES

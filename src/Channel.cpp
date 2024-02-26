@@ -1,5 +1,5 @@
 #include "Channel.hpp"
-#include "Client.hpp"
+#include "User.hpp"
 
 Channel::Channel(void) : _isInviteOnly(false)
 {
@@ -8,10 +8,10 @@ Channel::Channel(void) : _isInviteOnly(false)
 
 Channel::~Channel(void)
 {
-	for (std::map<std::string, t_client *>::const_iterator it = _clients.begin(); it != this->_clients.end(); ++it) {
+	for (std::map<std::string, t_user *>::const_iterator it = _users.begin(); it != this->_users.end(); ++it) {
 		delete (it->second);
 	}
-	_clients.clear();
+	_users.clear();
 }
 
 Channel::Channel(const std::string & channelName) : _name(channelName), _isInviteOnly(false)
@@ -31,56 +31,56 @@ bool	Channel::isInviteOnly(void) const
 	return (this->_isInviteOnly);
 }
 
-bool	Channel::isClientInChannel(const std::string & clientUserName) const
+bool	Channel::isUserPresent(const std::string & userUserName) const
 {
-	return (this->_clients.find(clientUserName) != this->_clients.end());
+	return (this->_users.find(userUserName) != this->_users.end());
 }
 
-bool	Channel::isClientAdmin(const std::string & clientUserName) const
+bool	Channel::isUserOperator(const std::string & userUserName) const
 {
-	std::map<std::string, t_client *>::const_iterator it = this->_clients.find(clientUserName);
+	std::map<std::string, t_user *>::const_iterator it = this->_users.find(userUserName);
 
-	if (it != this->_clients.end()) {
-		return (it->second->isAdmin);
+	if (it != this->_users.end()) {
+		return (it->second->isOperator);
 	}
 	return (false);
 }
 
 //
 
-void	Channel::addClient(Client * client)
+void	Channel::addUser(User * user)
 {
-	if (client && this->_clients.find(client->getUserName()) == this->_clients.end())
+	if (user && this->_users.find(user->getUserName()) == this->_users.end())
 	{
-		t_client * newClient = new t_client;
-		newClient->client = client;
-		newClient->isAdmin = false;
-		this->_clients.insert(std::make_pair(client->getUserName(), newClient));
+		t_user * newUser = new t_user;
+		newUser->user = user;
+		newUser->isOperator = false;
+		this->_users.insert(std::make_pair(user->getUserName(), newUser));
 	}
 }
 
-void	Channel::removeClient(const std::string & clientUserName)
+void	Channel::removeUser(const std::string & userUserName)
 {
-	if (this->_clients.find(clientUserName) != this->_clients.end())
+	if (this->_users.find(userUserName) != this->_users.end())
 	{
-		this->_clients[clientUserName]->client->removeChannel(this->_name);
-		delete (this->_clients[clientUserName]);
-		this->_clients.erase(clientUserName);
+		//this->_users[userUserName]->user->removeChannel(this->_name);
+		delete (this->_users[userUserName]);
+		this->_users.erase(userUserName);
 	}
 }
 
-void	Channel::promoteClient(const std::string & clientUserName)
+void	Channel::promoteUser(const std::string & userUserName)
 {
-	if (this->_clients.find(clientUserName) != this->_clients.end())
+	if (this->_users.find(userUserName) != this->_users.end())
 	{
-		this->_clients[clientUserName]->isAdmin = true;
+		this->_users[userUserName]->isOperator = true;
 	}
 }
 
-void	Channel::demoteClient(const std::string & clientUserName)
+void	Channel::demoteUser(const std::string & userUserName)
 {
-	if (this->_clients.find(clientUserName) != this->_clients.end())
+	if (this->_users.find(userUserName) != this->_users.end())
 	{
-		this->_clients[clientUserName]->isAdmin = false;
+		this->_users[userUserName]->isOperator = false;
 	}
 }

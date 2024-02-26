@@ -1,20 +1,20 @@
 #include <map>
 #include <iostream>
 
-class Client;
+class User;
 
 class Channel
 {
-	typedef struct s_client
+	typedef struct s_user
 	{
-		Client *	client;
-		bool		isAdmin;
-	} t_client;
+		User *	user;
+		bool	isOperator;
+	} t_user;
 
 	private:
 		std::string							_name;
 		bool								_isInviteOnly;
-		std::map <std::string, t_client *>	_clients;
+		std::map <std::string, t_user *>	_users;
 
 	public:
 		Channel(void);
@@ -26,12 +26,12 @@ class Channel
 		const std::string	getName(void) const;
 		bool				isInviteOnly(void) const;
 
-		bool				isClientInChannel(const std::string & clientUserName) const;
-		bool				isClientAdmin(const std::string & clientUserName) const;
+		bool				isUserPresent(const std::string & userUserName) const;
+		bool				isUserOperator(const std::string & userUserName) const;
 
 		//
-		void				addClient(Client *client);
-		void				removeClient(const std::string & clientUserName);
-		void				promoteClient(const std::string & clientUserName);
-		void				demoteClient(const std::string & clientUserName);
+		void				addUser(User *user);
+		void				removeUser(const std::string & userUserName);
+		void				promoteUser(const std::string & userUserName);
+		void				demoteUser(const std::string & userUserName);
 };

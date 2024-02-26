@@ -1,68 +1,68 @@
-#include "Client.hpp"
+#include "User.hpp"
 #include "Channel.hpp"
 
-Client::Client(void)
+User::User(void)
 {
 
 }
 
-Client::~Client()
+User::~User()
 {
 
 }
 
-Client::Client(int fd)
+User::User(int fd)
 {
 	_pollFd.fd = fd;
 	_pollFd.events = POLLIN;
 	_pollFd.revents = 0;
+	//_nickName = "abettini";
 }
 
 //getters
 
-pollfd	Client::getPollFd(void) const
+pollfd	User::getPollFd(void) const
 {
 	return (this->_pollFd);
 }
 
-const std::string &	Client::getUserName(void) const
+const std::string &	User::getUserName(void) const
 {
 	return (this->_userName);
 }
 
-const std::string &	Client::getNickName(void) const
+const std::string &	User::getNickName(void) const
 {
 	return (this->_nickName);
 }
 
-bool	Client::isClientInChannel(std::string channelName) const
+/* bool	User::isUserInChannel(std::string channelName) const
 {
 	return (this->_channels.find(channelName) != this->_channels.end());
-}
+} */
 
-bool	Client::isClientAdmin(std::string channelName) const
+/* bool	User::isUserOperator(std::string channelName) const
 {
 	std::map<std::string, Channel *>::const_iterator it = this->_channels.find(channelName);
 
 	if (it != this->_channels.end()) {
-		return (it->second->isClientAdmin(this->_userName));
+		return (it->second->isUserOperator(this->_userName));
 	}
 	return (false);
-}
+} */
 
-//
-void	Client::addChannel(Channel * channel)
+/* void	User::addChannel(Channel * channel)
 {
 	if (channel && this->_channels.find(channel->getName()) == this->_channels.end())
 	{
 		this->_channels.insert(std::make_pair(channel->getName(), channel));
 	}
-}
+} */
 
-void	Client::removeChannel(const std::string & channelName)
+/* void	User::removeChannel(const std::string & channelName)
 {
 	if (this->_channels.find(channelName) != this->_channels.end())
 	{
 		this->_channels.erase(channelName);
 	}
-}
+} */

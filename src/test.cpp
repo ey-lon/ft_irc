@@ -6,7 +6,7 @@
 /*   By: abettini <abettini@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/12/05 09:48:38 by abettini          #+#    #+#             */
-/*   Updated: 2024/02/22 15:51:27 by abettini         ###   ########.fr       */
+/*   Updated: 2024/02/26 14:27:50 by abettini         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -72,19 +72,19 @@ int main()
             {
                 if (fds[i].fd == serverSocket)
                 {
-                    int clientSocket = accept(serverSocket, nullptr, nullptr);
-                    if (clientSocket != -1)
+                    int userSocket = accept(serverSocket, nullptr, nullptr);
+                    if (userSocket != -1)
                     {
 						char	welcom[] = "Welcome to the Internet Relay Network nick!user@host\n";
 						char 	yourhost[] = "Your host is servername, running version version\n";
 						char	create[] = "server_name version user_modes chan_modes\n";
                         std::cout << "New connection accepted" << std::endl;
-                        fds.push_back({clientSocket, POLLIN, 0}); // Add the new client socket to the poll set
+                        fds.push_back({userSocket, POLLIN, 0}); // Add the new user socket to the poll set
                         //std::string reply = "test msg";
-                        //send(clientSocket, reply.c_str(), reply.length(), 0);
-                        send(clientSocket, welcom, sizeof(welcom), 0);
-                        send(clientSocket, yourhost, sizeof(yourhost), 0);
-                        send(clientSocket, create, sizeof(create), 0);
+                        //send(userSocket, reply.c_str(), reply.length(), 0);
+                        send(userSocket, welcom, sizeof(welcom), 0);
+                        send(userSocket, yourhost, sizeof(yourhost), 0);
+                        send(userSocket, create, sizeof(create), 0);
                     }
                 }
                 else
@@ -96,7 +96,7 @@ int main()
                         std::cerr << "Error receiving data" << std::endl;
                     }
                     else if (bytesRead == 0) {
-                        std::cout << "Connection closed by client" << std::endl;
+                        std::cout << "Connection closed by user" << std::endl;
                         close(fds[i].fd);
                         fds.erase(fds.begin() + i);
                         --i;

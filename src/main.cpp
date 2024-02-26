@@ -11,6 +11,7 @@ int main()
 	} */
 
 	try {
+		//Server server(av[1], av[2]);
 		Server server;
 
 		server.start();

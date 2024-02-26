@@ -8,13 +8,13 @@
 
 class Channel;
 
-class Client;
+class User;
 
 class Server
 {
 	private:
 		std::map<std::string, Channel *>	_channels;
-		std::map<std::string, Client *>		_clients;
+		std::map<std::string, User *>		_users;
 		std::string							_password;
 		int									_port;
 
@@ -39,11 +39,11 @@ class Server
 		//getters
 		const std::string &	getPassword(void) const;
 		int					getPort(void) const;
-		int					nClients(void) const;
+		int					nUsers(void) const;
 		int					nChannels(void) const;
 
-		Client *			getClientByName(const std::string & clientName) const;
-		Client *			getClientByFd(int clientFd) const;
+		User *				getUserByName(const std::string & userName) const;
+		User *				getUserByFd(int userFd) const;
 
 		Channel *			getChannelByName(const std::string & channelName) const;
 
@@ -55,9 +55,9 @@ class Server
 		void				addChannel(Channel * channel);
 		void				removeChannel(const std::string & channelName);
 
-		//clients
-		void				createClient(int fd, const std::string & clientName);
-		void				addClient(Client * client);
-		void				removeClient(const std::string & clientName);
-		void				removeClient(int clientFd);
+		//users
+		void				createUser(int fd, const std::string & userName);
+		void				addUser(User * user);
+		void				removeUser(const std::string & userName);
+		void				removeUser(int userFd);
 };

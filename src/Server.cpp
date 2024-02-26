@@ -1,6 +1,6 @@
 #include "Server.hpp"
 #include "Channel.hpp"
-#include "Client.hpp"
+#include "User.hpp"
 
 #include <cstring>
 #include <vector>
@@ -22,10 +22,10 @@ Server::~Server(void)
 	}
 	this->_channels.clear();
 
-	for (std::map<std::string, Client *>::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it) {
+	for (std::map<std::string, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
 		delete (it->second);
 	}
-	this->_clients.clear();
+	this->_users.clear();
 
 	this->_fds.clear();
 }
@@ -93,26 +93,28 @@ void	Server::start(void)
 
 void	Server::newConnection(void)
 {
-	int clientSocket = accept(_serverSocket, NULL, NULL);
-	if (clientSocket == -1) {
+	int userSocket = accept(_serverSocket, NULL, NULL);
+	if (userSocket == -1) {
 		std::cerr << "Connection error" << std::endl;
 		return ;
 	}
 	
+	
 	std::cout << "New connection accepted" << std::endl;
-	Client * newClient = new Client(clientSocket);
-	this->addClient(newClient);
-	this->_fds.push_back(newClient->getPollFd());
+	User * newUser = new User(userSocket);
+	this->addUser(newUser);
+	this->_fds.push_back(newUser->getPollFd());
 
-	std::string RPL_WELCOME =	":ircserv 001 " + newClient->getNickName() + " :Welcome to the Internet Relay Network " + newClient->getNickName() + "\r\n";
-	std::string RPL_YOURHOST =	":ircserv 002 " + newClient->getNickName() + " :Your host is " + _hostname + " , running version 42 \r\n";
-	std::string RPL_CREATED = 	":ircserv 003 " + newClient->getNickName() + " :This server was created 30/10/2023\r\n";
-	std::string RPL_MYINFO = 	":ircserv 004 " + newClient->getNickName() + " ircsev 42 +o +b+l+i+k+t\r\n";
-	std::string RPL_ISUPPORT =	":ircserv 005 " + newClient->getNickName() + " operator ban limit invite key topic :are supported by this server\r\n";
-	std::string RPL_MOTD =		":ircserv 372 " + newClient->getNickName() + " : Welcome to the ircserv\r\n";
-	std::string RPL_ENDOFMOTD =	":ircserv 376 " + newClient->getNickName() + " :End of MOTD command\r\n";
+	//std::string RPL_PONG =		"PONG :pong";
+	std::string RPL_WELCOME =	":ircserv 001 " + newUser->getNickName() + " :Welcome to the Internet Relay Network " + newUser->getNickName() + "\r\n";
+	std::string RPL_YOURHOST =	":ircserv 002 " + newUser->getNickName() + " :Your host is " + _hostname + " , running version 42 \r\n";
+	std::string RPL_CREATED = 	":ircserv 003 " + newUser->getNickName() + " :This server was created 30/10/2023\r\n";
+	std::string RPL_MYINFO = 	":ircserv 004 " + newUser->getNickName() + " ircsev 42 +o +b+l+i+k+t\r\n";
+	std::string RPL_ISUPPORT =	":ircserv 005 " + newUser->getNickName() + " operator ban limit invite key topic :are supported by this server\r\n";
+	std::string RPL_MOTD =		":ircserv 372 " + newUser->getNickName() + " : Welcome to the ircserv\r\n";
+	std::string RPL_ENDOFMOTD =	":ircserv 376 " + newUser->getNickName() + " :End of MOTD command\r\n";
 
-	int fd = newClient->getPollFd().fd;
+	int fd = newUser->getPollFd().fd;
 	send(fd, RPL_WELCOME.c_str(), RPL_WELCOME.length(), MSG);
 	send(fd, RPL_YOURHOST.c_str(), RPL_YOURHOST.length(), MSG);
 	send(fd, RPL_CREATED.c_str(), RPL_CREATED.length(), MSG);
@@ -120,31 +122,32 @@ void	Server::newConnection(void)
 	send(fd, RPL_ISUPPORT.c_str(), RPL_ISUPPORT.length(), MSG);
 	send(fd, RPL_MOTD.c_str(), RPL_MOTD.length(), MSG);
 	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
+	//send(fd, RPL_PONG.c_str(), RPL_PONG.length(), MSG);
 }
 
-void Server::dealMessage(int clientFd)
+void Server::dealMessage(int userFd)
 {
     char				buffer[1024];
     static std::string	msg;
 
-    ssize_t bytesRead = recv(clientFd, buffer, sizeof(buffer) - 1, 0);
+    ssize_t bytesRead = recv(userFd, buffer, sizeof(buffer) - 1, 0);
     if (bytesRead == -1) {
         std::cerr << "Error receiving data" << std::endl;
     }
     else if (bytesRead == 0) {
-        std::cout << "Connection closed by client" << std::endl;
-        close(clientFd);
+        std::cout << "Connection closed by user" << std::endl;
+        close(userFd);
 
 		std::vector<pollfd>::iterator it = this->_fds.begin();
-		while (it != this->_fds.end() && it->fd != clientFd) {
+		while (it != this->_fds.end() && it->fd != userFd) {
 			++it;
 		}
 		if (it != this->_fds.end()) {
 			this->_fds.erase(it);
 		}
 
-		//remove client from clients map?
-		this->removeClient(clientFd);
+		//remove user from users map?
+		this->removeUser(userFd);
 		
 		msg.clear();
     }
@@ -195,9 +198,9 @@ int	Server::getPort(void) const
 	return (this->_port);
 }
 
-int	Server::nClients(void) const
+int	Server::nUsers(void) const
 {
-	return (this->_clients.size());
+	return (this->_users.size());
 }
 
 int	Server::nChannels(void) const
@@ -205,23 +208,23 @@ int	Server::nChannels(void) const
 	return (this->_channels.size());
 }
 
-Client *	Server::getClientByName(const std::string & clientName) const
+User *	Server::getUserByName(const std::string & userName) const
 {
-	if (this->_clients.find(clientName) != this->_clients.end()) {
-		return (this->_clients.find(clientName)->second);
+	if (this->_users.find(userName) != this->_users.end()) {
+		return (this->_users.find(userName)->second);
 	}
 	else {
 		return (NULL);
 	}
 }
 
-Client *	Server::getClientByFd(int clientFd) const
+User *	Server::getUserByFd(int userFd) const
 {
-	std::map<std::string, Client *>::const_iterator it = this->_clients.begin();
-	while (it != this->_clients.end() && it->second->getPollFd().fd != clientFd) {
+	std::map<std::string, User *>::const_iterator it = this->_users.begin();
+	while (it != this->_users.end() && it->second->getPollFd().fd != userFd) {
 		++it;
 	}
-	if (it != this->_clients.end()) {
+	if (it != this->_users.end()) {
 		return (it->second);
 	}
 	else {
@@ -274,54 +277,54 @@ void	Server::removeChannel(const std::string & channelName)
 	}
 }
 
-//clients
-void	Server::createClient(int fd, const std::string & clientName)
+//users
+void	Server::createUser(int fd, const std::string & userName)
 {
-	if (this->_channels.find(clientName) == this->_channels.end()) {
-		Client * newClient = new Client(fd);
-		this->addClient(newClient);
+	if (this->_channels.find(userName) == this->_channels.end()) {
+		User * newUser = new User(fd);
+		this->addUser(newUser);
 	}
 	else {
-		std::cerr << "Error: cannot create client: " << clientName << ", client already exists." << std::endl;
+		std::cerr << "Error: cannot create user: " << userName << ", user already exists." << std::endl;
 	}
 }
 
-void	Server::addClient(Client * client)
+void	Server::addUser(User * user)
 {
-	if (client && this->_clients.find(client->getUserName()) == this->_clients.end()) {
-		this->_clients.insert(std::make_pair(client->getUserName(), client));
+	if (user && this->_users.find(user->getUserName()) == this->_users.end()) {
+		this->_users.insert(std::make_pair(user->getUserName(), user));
 	}
 }
 
-void	Server::removeClient(const std::string & clientName)
+void	Server::removeUser(const std::string & userName)
 {
-	if (this->_clients.find(clientName) != this->_clients.end()) {
-		delete (this->_clients[clientName]);
-		this->_clients.erase(clientName);
+	if (this->_users.find(userName) != this->_users.end()) {
+		delete (this->_users[userName]);
+		this->_users.erase(userName);
 	}
 }
 
-void	Server::removeClient(int clientFd)
+void	Server::removeUser(int userFd)
 {
-	std::map<std::string, Client *>::iterator it = this->_clients.begin();
-	while (it != this->_clients.end() && it->second->getPollFd().fd != clientFd) {
+	std::map<std::string, User *>::iterator it = this->_users.begin();
+	while (it != this->_users.end() && it->second->getPollFd().fd != userFd) {
 		++it;
 	}
-	if (it != this->_clients.end()) {
+	if (it != this->_users.end()) {
 		delete (it->second);
-		this->_clients.erase(it);
+		this->_users.erase(it);
 	}
 }
 
 /* 
-void Server::sendWelcomeBackToClient(int fd) {
-	std::string RPL_WELCOME =  ":ircserv 001 " + _clients[fd].Nickname() + " :Welcome to the Internet Relay Network " + _clients[fd].Nickname() + "\r\n";
-	std::string RPL_YOURHOST = ":ircserv 002 " + _clients[fd].Nickname() + " :Your host is " + hostname + " , running version 42 \r\n";
-	std::string RPL_CREATED =  ":ircserv 003 " + _clients[fd].Nickname() + " :This server was created 30/10/2023\r\n";
-	std::string RPL_MYINFO = ":ircserv 004 " + _clients[fd].Nickname() + " ircsev 42 +o +b+l+i+k+t\r\n";
-	std::string RPL_ISUPPORT = ":ircserv 005 " + _clients[fd].Nickname() + " operator ban limit invite key topic :are supported by this server\r\n";
-	std::string RPL_MOTD = ":ircserv 372 " + _clients[fd].Nickname() + " : Welcome to the ircserv\r\n";
-	std::string RPL_ENDOFMOTD = ":ircserv 376 " + _clients[fd].Nickname() + " :End of MOTD command\r\n";
+void Server::sendWelcomeBackToUser(int fd) {
+	std::string RPL_WELCOME =  ":ircserv 001 " + _users[fd].Nickname() + " :Welcome to the Internet Relay Network " + _users[fd].Nickname() + "\r\n";
+	std::string RPL_YOURHOST = ":ircserv 002 " + _users[fd].Nickname() + " :Your host is " + hostname + " , running version 42 \r\n";
+	std::string RPL_CREATED =  ":ircserv 003 " + _users[fd].Nickname() + " :This server was created 30/10/2023\r\n";
+	std::string RPL_MYINFO = ":ircserv 004 " + _users[fd].Nickname() + " ircsev 42 +o +b+l+i+k+t\r\n";
+	std::string RPL_ISUPPORT = ":ircserv 005 " + _users[fd].Nickname() + " operator ban limit invite key topic :are supported by this server\r\n";
+	std::string RPL_MOTD = ":ircserv 372 " + _users[fd].Nickname() + " : Welcome to the ircserv\r\n";
+	std::string RPL_ENDOFMOTD = ":ircserv 376 " + _users[fd].Nickname() + " :End of MOTD command\r\n";
 	send(fd, RPL_WELCOME.c_str(), RPL_WELCOME.length(), MSG);
 	send(fd, RPL_YOURHOST.c_str(), RPL_YOURHOST.length(), MSG);
 	send(fd, RPL_CREATED.c_str(), RPL_CREATED.length(), MSG);
