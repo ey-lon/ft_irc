@@ -26,6 +26,8 @@ Server::~Server(void)
 		delete (it->second);
 	}
 	this->_clients.clear();
+
+	this->_fds.clear();
 }
 
 Server::Server(int port, const std::string & password)
@@ -83,11 +85,15 @@ void	Server::start(void)
         close(_serverSocket);
         throw (std::exception());
     }
+
+	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
+		throw std::runtime_error ("ERROR: gethostname failed");
+	}
 }
 
 void	Server::newConnection(void)
 {
-	int clientSocket = accept(_serverSocket, nullptr, nullptr);
+	int clientSocket = accept(_serverSocket, NULL, NULL);
 	if (clientSocket == -1) {
 		std::cerr << "Connection error" << std::endl;
 		return ;
@@ -96,14 +102,30 @@ void	Server::newConnection(void)
 	std::cout << "New connection accepted" << std::endl;
 	Client * newClient = new Client(clientSocket);
 	this->addClient(newClient);
+	this->_fds.push_back(newClient->getPollFd());
 
-	//prompt?
+	std::string RPL_WELCOME =	":ircserv 001 " + newClient->getNickName() + " :Welcome to the Internet Relay Network " + newClient->getNickName() + "\r\n";
+	std::string RPL_YOURHOST =	":ircserv 002 " + newClient->getNickName() + " :Your host is " + _hostname + " , running version 42 \r\n";
+	std::string RPL_CREATED = 	":ircserv 003 " + newClient->getNickName() + " :This server was created 30/10/2023\r\n";
+	std::string RPL_MYINFO = 	":ircserv 004 " + newClient->getNickName() + " ircsev 42 +o +b+l+i+k+t\r\n";
+	std::string RPL_ISUPPORT =	":ircserv 005 " + newClient->getNickName() + " operator ban limit invite key topic :are supported by this server\r\n";
+	std::string RPL_MOTD =		":ircserv 372 " + newClient->getNickName() + " : Welcome to the ircserv\r\n";
+	std::string RPL_ENDOFMOTD =	":ircserv 376 " + newClient->getNickName() + " :End of MOTD command\r\n";
+
+	int fd = newClient->getPollFd().fd;
+	send(fd, RPL_WELCOME.c_str(), RPL_WELCOME.length(), MSG);
+	send(fd, RPL_YOURHOST.c_str(), RPL_YOURHOST.length(), MSG);
+	send(fd, RPL_CREATED.c_str(), RPL_CREATED.length(), MSG);
+	send(fd, RPL_MYINFO.c_str(), RPL_MYINFO.length(), MSG);
+	send(fd, RPL_ISUPPORT.c_str(), RPL_ISUPPORT.length(), MSG);
+	send(fd, RPL_MOTD.c_str(), RPL_MOTD.length(), MSG);
+	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
 }
 
-/* void Server::dealMessage(int clientFd)
+void Server::dealMessage(int clientFd)
 {
-    char			buffer[1024];
-    std::string		msg;
+    char				buffer[1024];
+    static std::string	msg;
 
     ssize_t bytesRead = recv(clientFd, buffer, sizeof(buffer) - 1, 0);
     if (bytesRead == -1) {
@@ -112,43 +134,50 @@ void	Server::newConnection(void)
     else if (bytesRead == 0) {
         std::cout << "Connection closed by client" << std::endl;
         close(clientFd);
+
+		std::vector<pollfd>::iterator it = this->_fds.begin();
+		while (it != this->_fds.end() && it->fd != clientFd) {
+			++it;
+		}
+		if (it != this->_fds.end()) {
+			this->_fds.erase(it);
+		}
+
+		//remove client from clients map?
+		this->removeClient(clientFd);
+		
+		msg.clear();
     }
     else {
-        //std::cout << "Received " << bytesRead << " bytes: " << buffer << std::endl;
+		buffer[bytesRead] = '\0'; // <--- NECESSARY
 		msg += buffer;
 		if (msg.find('\n') != std::string::npos) {
 			std::cout << msg << std::endl;
-			if (msg == "exit\n") {
-				close(_serverSocket);
-				throw (std::exception());
-			}
 			msg.clear();
+		}
     }
-} */
+}
 
 void	Server::loop(void)
 {
-	std::vector<pollfd> fds;
-    fds.push_back({_serverSocket, POLLIN, 0});
-    
+	std::cout << "Server listening on port " << _port << "..." << std::endl;
 
 	pollfd	serverPollFd;
-	serverPollFd.fd = _serverSocket;
+	serverPollFd.fd = this->_serverSocket;
 	serverPollFd.events = POLLIN;
 	serverPollFd.revents = 0;
-	
 
-	std::string msg;
+    this->_fds.push_back(serverPollFd);
+
     while (true) {
-        //int numready = poll(fds.data(), fds.size(), -1);
-		int numready = poll(&serverPollFd, nClients() + 1, -1);
-		for (std::map<std::string, Client *>::iterator it = _clients.begin(); it != _clients.end(); ++it) {
-            if (it->second->getRevents() & POLLIN) {
-                if (it->second->getFd() == _serverSocket) {
+		poll(this->_fds.data(), this->_fds.size(), -1);
+		for (size_t i = 0; i < this->_fds.size(); ++i) {
+            if (this->_fds[i].revents & POLLIN) {
+                if (this->_fds[i].fd == this->_serverSocket) {
                     this->newConnection();
                 }
                 else {
-					this->dealMessage();
+					this->dealMessage(this->_fds[i].fd);
                 }
             }
         }
@@ -174,6 +203,40 @@ int	Server::nClients(void) const
 int	Server::nChannels(void) const
 {
 	return (this->_channels.size());
+}
+
+Client *	Server::getClientByName(const std::string & clientName) const
+{
+	if (this->_clients.find(clientName) != this->_clients.end()) {
+		return (this->_clients.find(clientName)->second);
+	}
+	else {
+		return (NULL);
+	}
+}
+
+Client *	Server::getClientByFd(int clientFd) const
+{
+	std::map<std::string, Client *>::const_iterator it = this->_clients.begin();
+	while (it != this->_clients.end() && it->second->getPollFd().fd != clientFd) {
+		++it;
+	}
+	if (it != this->_clients.end()) {
+		return (it->second);
+	}
+	else {
+		return (NULL);
+	}
+}
+
+Channel *	Server::getChannelByName(const std::string & channelName) const
+{
+	if (this->_channels.find(channelName) != this->_channels.end()) {
+		return (this->_channels.find(channelName)->second);
+	}
+	else {
+		return (NULL);
+	}
 }
 
 //setters
@@ -237,3 +300,33 @@ void	Server::removeClient(const std::string & clientName)
 		this->_clients.erase(clientName);
 	}
 }
+
+void	Server::removeClient(int clientFd)
+{
+	std::map<std::string, Client *>::iterator it = this->_clients.begin();
+	while (it != this->_clients.end() && it->second->getPollFd().fd != clientFd) {
+		++it;
+	}
+	if (it != this->_clients.end()) {
+		delete (it->second);
+		this->_clients.erase(it);
+	}
+}
+
+/* 
+void Server::sendWelcomeBackToClient(int fd) {
+	std::string RPL_WELCOME =  ":ircserv 001 " + _clients[fd].Nickname() + " :Welcome to the Internet Relay Network " + _clients[fd].Nickname() + "\r\n";
+	std::string RPL_YOURHOST = ":ircserv 002 " + _clients[fd].Nickname() + " :Your host is " + hostname + " , running version 42 \r\n";
+	std::string RPL_CREATED =  ":ircserv 003 " + _clients[fd].Nickname() + " :This server was created 30/10/2023\r\n";
+	std::string RPL_MYINFO = ":ircserv 004 " + _clients[fd].Nickname() + " ircsev 42 +o +b+l+i+k+t\r\n";
+	std::string RPL_ISUPPORT = ":ircserv 005 " + _clients[fd].Nickname() + " operator ban limit invite key topic :are supported by this server\r\n";
+	std::string RPL_MOTD = ":ircserv 372 " + _clients[fd].Nickname() + " : Welcome to the ircserv\r\n";
+	std::string RPL_ENDOFMOTD = ":ircserv 376 " + _clients[fd].Nickname() + " :End of MOTD command\r\n";
+	send(fd, RPL_WELCOME.c_str(), RPL_WELCOME.length(), MSG);
+	send(fd, RPL_YOURHOST.c_str(), RPL_YOURHOST.length(), MSG);
+	send(fd, RPL_CREATED.c_str(), RPL_CREATED.length(), MSG);
+	send(fd, RPL_MYINFO.c_str(), RPL_MYINFO.length(), MSG);
+	send(fd, RPL_ISUPPORT.c_str(), RPL_ISUPPORT.length(), MSG);
+	send(fd, RPL_MOTD.c_str(), RPL_MOTD.length(), MSG);
+	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
+} */

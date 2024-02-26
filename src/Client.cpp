@@ -20,27 +20,17 @@ Client::Client(int fd)
 
 //getters
 
-int	Client::getFd() const
+pollfd	Client::getPollFd(void) const
 {
-	return (this->_pollFd.fd);
+	return (this->_pollFd);
 }
 
-short	Client::getEvents() const
-{
-	return (this->_pollFd.events);
-}
-
-short	Client::getRevents() const
-{
-	return (this->_pollFd.revents);
-}
-
-const std::string &	Client::getUserName() const
+const std::string &	Client::getUserName(void) const
 {
 	return (this->_userName);
 }
 
-const std::string &	Client::getNickName() const
+const std::string &	Client::getNickName(void) const
 {
 	return (this->_nickName);
 }

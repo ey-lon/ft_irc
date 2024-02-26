@@ -19,12 +19,10 @@ class Client
 		Client(int fd);
 
 		//getters
-		int					getFd() const;
-		short				getEvents() const;
-		short				getRevents() const;
+		pollfd				getPollFd(void) const;
 		
-		const std::string &	getUserName() const;
-		const std::string &	getNickName() const;
+		const std::string &	getUserName(void) const;
+		const std::string &	getNickName(void) const;
 
 		bool				isClientInChannel(std::string channelName) const;
 		bool				isClientAdmin(std::string channelName) const;

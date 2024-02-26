@@ -1,6 +1,10 @@
 #include <map>
+#include <vector>
 #include <iostream>
 #include <netinet/in.h>
+#include <poll.h>
+
+#define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
 
 class Channel;
 
@@ -17,6 +21,9 @@ class Server
 		int									_serverSocket;
 		sockaddr_in							_serverAddress;
 
+		char								_hostname[256];
+		std::vector<pollfd>					_fds;
+
 	public:
 		Server(void);
 		~Server(void);
@@ -27,13 +34,18 @@ class Server
 		void				loop(void);
 
 		void				newConnection(void);
-		void				dealMessage(void);
+		void				dealMessage(int);
 
 		//getters
 		const std::string &	getPassword(void) const;
 		int					getPort(void) const;
 		int					nClients(void) const;
 		int					nChannels(void) const;
+
+		Client *			getClientByName(const std::string & clientName) const;
+		Client *			getClientByFd(int clientFd) const;
+
+		Channel *			getChannelByName(const std::string & channelName) const;
 
 		//setters
 		void				setPassword(const std::string & password);
@@ -47,4 +59,5 @@ class Server
 		void				createClient(int fd, const std::string & clientName);
 		void				addClient(Client * client);
 		void				removeClient(const std::string & clientName);
+		void				removeClient(int clientFd);
 };
