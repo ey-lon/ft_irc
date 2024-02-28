@@ -1,6 +1,8 @@
 #include "Channel.hpp"
 #include "User.hpp"
 
+//--------------------------------------------------
+//constructors, destructors, ...
 Channel::Channel(void) : _isInviteOnly(false) {}
 
 Channel::Channel(const std::string & channelName) : _name(channelName), _isInviteOnly(false) {}
@@ -12,7 +14,7 @@ Channel::~Channel(void) {
 	_users.clear();
 }
 
-
+//--------------------------------------------------
 // getters
 const std::string	Channel::getName(void) const {
 	return (this->_name);
@@ -22,6 +24,7 @@ bool	Channel::isInviteOnly(void) const {
 	return (this->_isInviteOnly);
 }
 
+//--------------------------------------------------
 //setters
 void	Channel::setName(const std::string & name) {
 	this->_name = name;
@@ -31,6 +34,7 @@ void	Channel::setInviteOnly(bool isInviteOnly) {
 	this->_isInviteOnly = isInviteOnly;
 }
 
+//--------------------------------------------------
 //users
 bool	Channel::isUserPresent(const std::string & userName) const {
 	return (this->_users.find(userName) != this->_users.end());

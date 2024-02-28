@@ -1,6 +1,8 @@
 #include "User.hpp"
 #include "Channel.hpp"
 
+//--------------------------------------------------
+//constructors, destructors, ...
 User::User(void) {}
 
 User::~User() {}
@@ -12,6 +14,7 @@ User::User(int fd) {
 	//_nickName = "abettini";
 }
 
+//--------------------------------------------------
 //getters
 pollfd	User::getPollFd(void) const {
 	return (this->_pollFd);
@@ -41,6 +44,7 @@ const std::string &	User::getMessage(void) const {
 	return (this->_message);
 }
 
+//--------------------------------------------------
 //setters
 void	User::setUserName(const std::string & userName) {
 	this->_userName = userName;
@@ -54,8 +58,8 @@ void	User::setMessage(const std::string & message) {
 	this->_message = message;
 }
 
+//--------------------------------------------------
 //UNUSED
-
 /* bool	User::isUserInChannel(std::string channelName) const
 {
 	return (this->_channels.find(channelName) != this->_channels.end());

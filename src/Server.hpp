@@ -25,16 +25,14 @@ class Server
 	public:
 		Server(void); // <-- only for testing (to be removed)
 		Server(int port, const std::string & password);
-
 		~Server(void);
 
 		void				start(void);
 		void				loop(void);
 
-		void				newConnection(void);
-		int					dealMessage(int);
-
 		void				welcome(User * user);
+		int					dealMessage(int);
+		void				newConnection(void);
 
 		//getters
 		const std::string &	getPassword(void) const;

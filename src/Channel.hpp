@@ -16,11 +16,11 @@ class Channel
 		bool								_isInviteOnly;
 		std::map <std::string, t_user *>	_users;
 
-	public:
 		Channel(void);
-		~Channel(void);
 
+	public:
 		Channel(const std::string & channelName);
+		~Channel(void);
 		
 		//getters
 		const std::string	getName(void) const;

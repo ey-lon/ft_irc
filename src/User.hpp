@@ -7,13 +7,14 @@ class Channel;
 class User
 {
 	private:
-		User(void);
-		pollfd								_pollFd;
 		std::string							_userName;
 		std::string							_nickName;
 		//std::map<std::string, Channel *>	_channels;
 
+		pollfd								_pollFd;
 		std::string							_message;
+		
+		User(void);
 
 	public:
 		User(int fd);

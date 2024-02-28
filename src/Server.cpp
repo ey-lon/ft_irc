@@ -11,17 +11,19 @@
 
 #define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
 
+//--------------------------------------------------
+//constructors, destructors, ...
 Server::Server(void) : _port(6667) {}
 
 Server::Server(int port, const std::string & password) {
-	//if (...) { //controlli sulla porta
+	//if (...) { //port error check
 		this->_port = port;
 	//}
 	/* else {
 		throw (std::exception());
 	} */
 
-	//if (...) { //controlli sulla password
+	//if (...) { //password error check
 		this->_password = password;
 	//}
 	/* else {
@@ -42,50 +44,9 @@ Server::~Server(void) {
 	this->_users.clear();
 }
 
-//
+//--------------------------------------------------
 
-void	Server::start(void)
-{
-	// Create a socket
-	_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (_serverSocket == -1) {
-        std::cerr << "Error creating socket" << std::endl;
-        throw (std::exception());
-    }
-
-	// Set socket options
-    int opt = 1;
-    if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        std::cerr << "Error setting socket options" << std::endl;
-        throw (std::exception());
-    }
-
-    // Set up server address structure
-	_serverAddress.sin_family = AF_INET;
-    _serverAddress.sin_addr.s_addr = INADDR_ANY;	// Listen on all available interfaces
-    _serverAddress.sin_port = htons(this->_port);
-
-	// Bind the socket
-    if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
-        close(_serverSocket);
-        std::cerr << "Error binding socket" << std::endl;
-        throw (std::exception());
-    }
-
-    // Listen for incoming connections
-    if (listen(_serverSocket, SOMAXCONN) == -1) {
-        close(_serverSocket);
-        std::cerr << "Error listening on socket" << std::endl;
-        throw (std::exception());
-    }
-
-	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
-		throw std::runtime_error ("ERROR: gethostname failed");
-	}
-}
-
-void	Server::welcome(User * user)
-{
+void	Server::welcome(User * user) {
 	std::string nickname = user->getNickName();
 	std::string RPL_WELCOME =	":ircserv 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
 	std::string RPL_YOURHOST =	":ircserv 002 " + nickname + " :Your host is " + _hostname + " , running version 42 \r\n";
@@ -105,21 +66,19 @@ void	Server::welcome(User * user)
 	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
 }
 
-void	Server::newConnection(void)
-{
+void	Server::newConnection(void) {
 	int userSocket = accept(_serverSocket, NULL, NULL);
 	if (userSocket == -1) {
 		std::cerr << "Connection error" << std::endl;
 		return ;
 	}
 	std::cout << "New connection accepted, user_fd [" << userSocket << "]" << std::endl;
-
 	User * newUser = this->createUser(userSocket);
+
 	this->welcome(newUser); 						// <-- server reply to client (when? after user sent info?)
 }
 
-int Server::dealMessage(int userFd)
-{
+int Server::dealMessage(int userFd) {
 	User * ptr = this->getUserByFd(userFd);
 	if (!ptr) {												// <-- don't know how it could happen, but you never know.
 		std::cerr << "Error: User not found" << std::endl;
@@ -147,8 +106,7 @@ int Server::dealMessage(int userFd)
     }
 }
 
-void	Server::loop(void)
-{
+void	Server::loop(void) {
 	std::cout << "Server listening on port " << _port << "..." << std::endl;
 
 	pollfd	serverPollFd;
@@ -175,6 +133,42 @@ void	Server::loop(void)
     }
 }
 
+void	Server::start(void) {
+	// Create a socket
+	_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (_serverSocket == -1) {
+        std::cerr << "Error creating socket" << std::endl;
+        throw (std::exception());
+    }
+	// Set socket options
+    int opt = 1;
+    if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+        std::cerr << "Error setting socket options" << std::endl;
+        throw (std::exception());
+    }
+    // Set up server address structure
+	_serverAddress.sin_family = AF_INET;
+    _serverAddress.sin_addr.s_addr = INADDR_ANY;	// Listen on all available interfaces
+    _serverAddress.sin_port = htons(this->_port);
+	// Bind the socket
+    if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
+        close(_serverSocket);
+        std::cerr << "Error binding socket" << std::endl;
+        throw (std::exception());
+    }
+    // Listen for incoming connections
+    if (listen(_serverSocket, SOMAXCONN) == -1) {
+        close(_serverSocket);
+        std::cerr << "Error listening on socket" << std::endl;
+        throw (std::exception());
+    }
+	//get hostname
+	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
+		throw std::runtime_error ("ERROR: gethostname failed");
+	}
+}
+
+//--------------------------------------------------
 //getters
 const std::string &	Server::getPassword(void) const {
 	return (this->_password);
@@ -192,28 +186,16 @@ int	Server::nChannels(void) const {
 	return (this->_channels.size());
 }
 
-User *	Server::getUserByName(const std::string & userName) const {
-	std::map<int, User *>::const_iterator it = this->_users.begin();
-	while (it != this->_users.end() && it->second->getUserName() != userName) {
-		++it;
-	}
-	if (it != this->_users.end()) {
-		return (it->second);
-	}
-	else {
-		return (NULL);
-	}
+//--------------------------------------------------
+//setters
+void	Server::setPassword(const std::string &password) {
+	//if (...) { //password error check
+		this->_password = password;
+	//}
 }
 
-User *	Server::getUserByFd(int userFd) const {
-	if (this->_users.find(userFd) != this->_users.end()) {
-		return (this->_users.find(userFd)->second);
-	}
-	else {
-		return (NULL);
-	}
-
-}
+//--------------------------------------------------
+//channels
 
 Channel *	Server::getChannelByName(const std::string & channelName) const {
 	if (this->_channels.find(channelName) != this->_channels.end()) {
@@ -223,15 +205,6 @@ Channel *	Server::getChannelByName(const std::string & channelName) const {
 		return (NULL);
 	}
 }
-
-//setters
-void	Server::setPassword(const std::string &password) {
-	//if (...) { //controlli sulla password
-		this->_password = password;
-	//}
-}
-
-//channels
 Channel *	Server::createChannel(const std::string & channelName) {
 	if (this->_channels.find(channelName) == this->_channels.end()) {
 		Channel * newChannel = new Channel(channelName);
@@ -250,7 +223,30 @@ void	Server::removeChannel(const std::string & channelName) {
 	}
 }
 
+//--------------------------------------------------
 //users
+User *	Server::getUserByFd(int userFd) const {
+	if (this->_users.find(userFd) != this->_users.end()) {
+		return (this->_users.find(userFd)->second);
+	}
+	else {
+		return (NULL);
+	}
+
+}
+
+User *	Server::getUserByName(const std::string & userName) const {
+	std::map<int, User *>::const_iterator it = this->_users.begin();
+	while (it != this->_users.end() && it->second->getUserName() != userName) {
+		++it;
+	}
+	if (it != this->_users.end()) {
+		return (it->second);
+	}
+	else {
+		return (NULL);
+	}
+}
 
 User *	Server::createUser(int fd) {
 	if (this->_users.find(fd) == this->_users.end()) {
@@ -279,7 +275,7 @@ void	Server::removeUser(int userFd) {
 	}
 }
 
-
+//--------------------------------------------------
 //UNUSED
 /*
 void	set username(User * user, const std::string & userName) {
