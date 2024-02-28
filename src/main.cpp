@@ -17,8 +17,8 @@ int main()
 		server.start();
 		server.loop();
 	}
-	catch (std::exception &) {
-		std::cerr << "Error" << std::endl;
+	catch (std::exception &e) {
+		std::cerr << "Error: " << e.what() << std::endl;
 	}
 	return (0);
 }

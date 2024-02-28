@@ -13,19 +13,30 @@ class User
 		std::string							_nickName;
 		//std::map<std::string, Channel *>	_channels;
 
+		std::string							_message;
+
 	public:
 		User(int fd);
 		~User(void);
 
 		//getters
 		pollfd				getPollFd(void) const;
+		int					getFd(void) const;
+		short				getEvents(void) const;
+		short				getRevents(void) const;
 		
 		const std::string &	getUserName(void) const;
 		const std::string &	getNickName(void) const;
+		const std::string &	getMessage(void) const;
 
+		//setters
+		void				setUserName(const std::string & userName);
+		void				setNickName(const std::string & nickName);
+		void				setMessage(const std::string & message);
+
+		//UNUSED
 		//bool				isUserInChannel(std::string channelName) const;
 		//bool				isUserOperator(std::string channelName) const;
-
 		//void				addChannel(Channel * channel);
 		//void				removeChannel(const std::string & channelName);
 };

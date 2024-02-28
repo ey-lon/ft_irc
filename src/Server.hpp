@@ -4,8 +4,6 @@
 #include <netinet/in.h>
 #include <poll.h>
 
-#define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
-
 class Channel;
 
 class User;
@@ -13,28 +11,30 @@ class User;
 class Server
 {
 	private:
-		std::map<std::string, Channel *>	_channels;
-		std::map<std::string, User *>		_users;
-		std::string							_password;
-		int									_port;
-
 		int									_serverSocket;
 		sockaddr_in							_serverAddress;
-
 		char								_hostname[256];
+
+		int									_port;
+		std::string							_password;
+
+		std::map<std::string, Channel *>	_channels;
+		std::map<int, User *>				_users;
 		std::vector<pollfd>					_fds;
 
 	public:
-		Server(void);
-		~Server(void);
-
+		Server(void); // <-- only for testing (to be removed)
 		Server(int port, const std::string & password);
+
+		~Server(void);
 
 		void				start(void);
 		void				loop(void);
 
 		void				newConnection(void);
-		void				dealMessage(int);
+		int					dealMessage(int);
+
+		void				welcome(User * user);
 
 		//getters
 		const std::string &	getPassword(void) const;
@@ -42,22 +42,17 @@ class Server
 		int					nUsers(void) const;
 		int					nChannels(void) const;
 
-		User *				getUserByName(const std::string & userName) const;
-		User *				getUserByFd(int userFd) const;
-
-		Channel *			getChannelByName(const std::string & channelName) const;
-
 		//setters
 		void				setPassword(const std::string & password);
 
 		//channels
-		void				createChannel(const std::string & channelName);
-		void				addChannel(Channel * channel);
+		Channel *			getChannelByName(const std::string & channelName) const;
+		Channel *			createChannel(const std::string & channelName);
 		void				removeChannel(const std::string & channelName);
 
 		//users
-		void				createUser(int fd, const std::string & userName);
-		void				addUser(User * user);
-		void				removeUser(const std::string & userName);
+		User *				getUserByFd(int userFd) const;
+		User *				getUserByName(const std::string & userName) const;
+		User *				createUser(int fd);
 		void				removeUser(int userFd);
 };

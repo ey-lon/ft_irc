@@ -1,18 +1,11 @@
 #include "User.hpp"
 #include "Channel.hpp"
 
-User::User(void)
-{
+User::User(void) {}
 
-}
+User::~User() {}
 
-User::~User()
-{
-
-}
-
-User::User(int fd)
-{
+User::User(int fd) {
 	_pollFd.fd = fd;
 	_pollFd.events = POLLIN;
 	_pollFd.revents = 0;
@@ -20,21 +13,48 @@ User::User(int fd)
 }
 
 //getters
-
-pollfd	User::getPollFd(void) const
-{
+pollfd	User::getPollFd(void) const {
 	return (this->_pollFd);
 }
 
-const std::string &	User::getUserName(void) const
-{
+int	User::getFd(void) const {
+	return (this->_pollFd.fd);
+}
+
+short	User::getEvents(void) const {
+	return (this->_pollFd.events);
+}
+
+short	User::getRevents(void) const {
+	return (this->_pollFd.revents);
+}
+
+const std::string &	User::getUserName(void) const {
 	return (this->_userName);
 }
 
-const std::string &	User::getNickName(void) const
-{
+const std::string &	User::getNickName(void) const {
 	return (this->_nickName);
 }
+
+const std::string &	User::getMessage(void) const {
+	return (this->_message);
+}
+
+//setters
+void	User::setUserName(const std::string & userName) {
+	this->_userName = userName;
+}
+
+void	User::setNickName(const std::string & nickName) {
+	this->_nickName = nickName;
+}
+
+void	User::setMessage(const std::string & message) {
+	this->_message = message;
+}
+
+//UNUSED
 
 /* bool	User::isUserInChannel(std::string channelName) const
 {
