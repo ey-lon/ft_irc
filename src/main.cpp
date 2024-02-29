@@ -20,5 +20,8 @@ int main()
 	catch (std::exception &e) {
 		std::cerr << "Error: " << e.what() << std::endl;
 	}
+	catch (const char * str) {
+		std::cerr << "Error: " << str << std::endl;
+	}
 	return (0);
 }

@@ -12,6 +12,8 @@ class User
 		//std::map<std::string, Channel *>	_channels;
 
 		pollfd								_pollFd;
+		bool								_isAuthenticated;
+		bool								_isAuthorized;
 		std::string							_message;
 		
 		User(void);
@@ -21,6 +23,9 @@ class User
 		~User(void);
 
 		//getters
+		bool				isAuthenticated(void) const;
+		bool				isAuthorized(void) const;
+		int					getAuthenticationFase(void) const;
 		pollfd				getPollFd(void) const;
 		int					getFd(void) const;
 		short				getEvents(void) const;
@@ -31,6 +36,8 @@ class User
 		const std::string &	getMessage(void) const;
 
 		//setters
+		void				authenticate(void);
+		void				authorize(void);
 		void				setUserName(const std::string & userName);
 		void				setNickName(const std::string & nickName);
 		void				setMessage(const std::string & message);

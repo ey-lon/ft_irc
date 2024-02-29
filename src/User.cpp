@@ -3,11 +3,11 @@
 
 //--------------------------------------------------
 //constructors, destructors, ...
-User::User(void) {}
+User::User(void) : _isAuthenticated(false), _isAuthorized(0) {}
 
 User::~User() {}
 
-User::User(int fd) {
+User::User(int fd) : _isAuthenticated(false), _isAuthorized(0) {
 	_pollFd.fd = fd;
 	_pollFd.events = POLLIN;
 	_pollFd.revents = 0;
@@ -16,6 +16,14 @@ User::User(int fd) {
 
 //--------------------------------------------------
 //getters
+bool	User::isAuthenticated(void) const {
+	return (this->_isAuthenticated);
+}
+
+bool	User::isAuthorized(void) const {
+	return (this->_isAuthorized);
+}
+
 pollfd	User::getPollFd(void) const {
 	return (this->_pollFd);
 }
@@ -46,6 +54,14 @@ const std::string &	User::getMessage(void) const {
 
 //--------------------------------------------------
 //setters
+void	User::authenticate() {
+	this->_isAuthenticated = true;
+}
+
+void	User::authorize() {
+	this->_isAuthorized = true;
+}
+
 void	User::setUserName(const std::string & userName) {
 	this->_userName = userName;
 }

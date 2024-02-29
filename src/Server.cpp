@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <netdb.h>
 
 #define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
 
@@ -73,9 +74,95 @@ void	Server::newConnection(void) {
 		return ;
 	}
 	std::cout << "New connection accepted, user_fd [" << userSocket << "]" << std::endl;
-	User * newUser = this->createUser(userSocket);
+	//User * newUser = this->createUser(userSocket);
+	this->createUser(userSocket);
 
-	this->welcome(newUser); 						// <-- server reply to client (when? after user sent info?)
+	//this->welcome(newUser); 						// <-- server reply to client (when? after user sent info?)
+}
+
+void	Server::join(std::string command, User * user)
+{
+	//JOIN #<channel_name> <password>
+	std::string rpl;
+	rpl = ":ircserv 332 lamici #canale :Channel Topic\n";
+	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+	rpl = ":ircserv 333 lamici #canale operator 1234567890\n";
+	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+	rpl = ":ircserv JOIN canale\n";
+	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+}
+
+void	Server::authorization(std::string command, User *user) {
+	//here I can expect either CAP LS 302 or PASS command
+	size_t i = 0;
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	command = command.substr(i);
+	if (command.length() > 3 && !command.compare(0, 3, "CAP") && std::isspace(command[3])) {
+		;
+	}
+	else if (command.length() > 4 && !command.compare(0, 4, "PASS") && std::isspace(command[4])) {
+		if (!this->pass(command, user)) {
+			user->authorize();
+		}
+	}
+}
+
+void	Server::login(std::string command, User *user) {
+	//here I can expect either NICK or USER command
+	size_t i = 0;
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	command = command.substr(i);
+	if (command.length() > 4 && !command.compare(0, 4, "NICK") && std::isspace(command[4])) {
+		this->nick(command, user);
+	}
+	else if (command.length() > 4 && !command.compare(0, 4, "USER") && std::isspace(command[4])) {
+		this->user(command, user);
+	}
+	if (user->getNickName() != "" && user->getUserName() != "") {
+		user->authenticate();
+	}
+}
+
+void	Server::dealCommand(std::string command, User *user) {
+	size_t i = 0;
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	command = command.substr(i);
+	//commands
+	if (command.length() > 3 && !command.compare(0, 3, "CAP") && std::isspace(command[3])) {
+		;
+	}
+	else if (command.length() > 4 && !command.compare(0, 4, "NICK") && std::isspace(command[4])) {
+		this->nick(command, user);
+	}
+	else if (command.length() > 4 && !command.compare(0, 4, "JOIN") && std::isspace(command[4])) {
+		this->join(command, user);
+	}
+	else if (command.length() > 7 && !command.compare(0, 7, "PRIVMSG") && std::isspace(command[7])) {
+		this->privmsg(command, user);
+	}
+	//operators only
+	else if (command.length() > 4 && !command.compare(0, 4, "KICK") && std::isspace(command[4])) {
+		this->kick(command, user);
+	}
+	else if (command.length() > 6 && !command.compare(0, 6, "INVITE") && std::isspace(command[6])) {
+		this->invite(command, user);
+	}
+	else if (command.length() > 5 && !command.compare(0, 5, "TOPIC") && std::isspace(command[5])) {
+		this->topic(command, user);
+	}
+	else if (command.length() > 4 && !command.compare(0, 4, "MODE") && std::isspace(command[4])) {
+		this->mode(command, user);
+	}
+	else {
+		//unknown command <-- send to client?
+		;
+	}
 }
 
 int Server::dealMessage(int userFd) {
@@ -98,7 +185,15 @@ int Server::dealMessage(int userFd) {
 		buffer[bytesRead] = '\0'; // <--- NECESSARY
 		ptr->setMessage(ptr->getMessage() + buffer);
 		if (ptr->getMessage().find('\n') != std::string::npos) {
-			//dealCommands();
+			if (!ptr->isAuthorized()) {
+				this->authorization(ptr->getMessage(), ptr);
+			}
+			else if (!ptr->isAuthenticated()) {
+				this->login(ptr->getMessage(), ptr);
+			}
+			else {
+				this->dealCommand(ptr->getMessage(), ptr);
+			}
 			std::cout << "[" << ptr->getFd() << "]: " << ptr->getMessage() << std::endl;
 			ptr->setMessage("");
 		}
@@ -107,7 +202,7 @@ int Server::dealMessage(int userFd) {
 }
 
 void	Server::loop(void) {
-	std::cout << "Server listening on port " << _port << "..." << std::endl;
+	std::cout << "Server with ip: " << _ip << ", listening on port: " << _port << std::endl;
 
 	pollfd	serverPollFd;
 	serverPollFd.fd = this->_serverSocket;
@@ -123,11 +218,9 @@ void	Server::loop(void) {
                 if (this->_fds[i].fd == this->_serverSocket) {
                     this->newConnection();
                 }
-                else {
-					if (this->dealMessage(this->_fds[i].fd) == 1) {
-						--i; // <-- if client disconnects, its pollfd gets removed from the vector, so the next pollfd is at the index of the one that got removed, right? 
-					}
-                }
+                else if (this->dealMessage(this->_fds[i].fd) == 1) {
+					--i; // <-- if client disconnects, its pollfd gets removed from the vector, so the next pollfd is at the index of the one that got removed, right? 
+				}
             }
         }
     }
@@ -137,14 +230,12 @@ void	Server::start(void) {
 	// Create a socket
 	_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (_serverSocket == -1) {
-        std::cerr << "Error creating socket" << std::endl;
-        throw (std::exception());
+		throw ("socket creation");
     }
 	// Set socket options
     int opt = 1;
     if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        std::cerr << "Error setting socket options" << std::endl;
-        throw (std::exception());
+        throw ("socket option settings");
     }
     // Set up server address structure
 	_serverAddress.sin_family = AF_INET;
@@ -153,19 +244,25 @@ void	Server::start(void) {
 	// Bind the socket
     if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
         close(_serverSocket);
-        std::cerr << "Error binding socket" << std::endl;
-        throw (std::exception());
+        throw ("socket binding");
     }
     // Listen for incoming connections
     if (listen(_serverSocket, SOMAXCONN) == -1) {
         close(_serverSocket);
-        std::cerr << "Error listening on socket" << std::endl;
-        throw (std::exception());
+        throw ("socket listening");
     }
-	//get hostname
+	// Get hostname
 	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
-		throw std::runtime_error ("ERROR: gethostname failed");
+		close(_serverSocket);
+		throw ("gethostname");
 	}
+	// Get ip
+	struct hostent *host_entry = gethostbyname(_hostname);
+	if (host_entry == NULL) {
+		close(_serverSocket);
+		throw ("gethostbyname");
+	}
+	_ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
 }
 
 //--------------------------------------------------
