@@ -34,7 +34,7 @@ class Server
 
 		//commands
 		void				cap				(std::string command, User * user);
-		int					pass			(std::string command, User * user);
+		void				pass			(std::string command, User * user);
 		void				user			(std::string command, User * user);
 		void				nick			(std::string command, User * user);
 		void				join			(std::string command, User * user);
@@ -68,7 +68,7 @@ class Server
 
 		//users
 		User *				getUserByFd(int userFd) const;
-		User *				getUserByName(const std::string & userName) const;
+		User *				getUserByUserName(const std::string & userName) const;
 		User *				createUser(int fd);
 		void				removeUser(int userFd);
 };

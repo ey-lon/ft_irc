@@ -91,7 +91,7 @@ void	User::setMessage(const std::string & message) {
 	return (false);
 } */
 
-/* void	User::addChannel(Channel * channel)
+/*  void	User::addChannel(Channel * channel)
 {
 	if (channel && this->_channels.find(channel->getName()) == this->_channels.end())
 	{

@@ -1,6 +1,7 @@
 #include "Server.hpp"
 #include "Channel.hpp"
 #include "User.hpp"
+#include "Utils.hpp"
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -46,6 +47,140 @@ Server::~Server(void) {
 }
 
 //--------------------------------------------------
+void	Server::user(std::string command, User * user) {
+	//USER <username>
+	std::vector<std::string> vec = splitString(command);
+	if (vec.size() < 2) {
+		; //error
+	}
+	else if (getUserByUserName(vec[1])) {
+		; //error <-- user already exists
+	}
+	else {
+		user->setUserName(vec[1]);
+	}
+}
+
+void	Server::nick(std::string command, User * user) {
+	//NICK <nickname>
+	std::vector<std::string> vec = splitString(command);
+	if (vec.size() < 2) {
+		; //error
+	}
+	else {
+		user->setNickName(vec[1]);
+	}
+}
+
+void	Server::privmsg(std::string command, User * user) {
+	//PRIVMSG   <user>    <message>
+	bool	destChannel = false;
+	size_t i = 0;
+	i += 7; // <-- skip PRIVMSG
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	if (command[i] == '#') {
+		i++;
+		destChannel = true;
+	}
+	size_t j = i;
+	while (command[j] && !std::isspace(command[j])) {
+		j++;
+	}
+	std::string dest = command.substr(i, j - i);
+	i = j;
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	std::string msgText = command.substr(i);
+	if (!msgText.empty()) {
+		if (destChannel) {
+			Channel * channelDest = this->getChannelByName(dest);
+			if (channelDest) {
+				//send message to all user in channel
+			}
+			else {
+				//channel not found
+			}
+		}
+		else {
+			User * userDest = this->getUserByUserName(dest);
+			if (userDest) {
+				//send message to user
+			}
+			else {
+				//user not found
+			}
+		}
+	}
+}
+
+void	Server::join(std::string command, User * user) {
+	//JOIN #abc <password>
+	size_t i = 0;
+	i += 4; // <-- skip JOIN
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	if (command[i] != '#') {
+		; //error
+		return ;
+	}
+	i++;
+	//get channel name
+	size_t j = i;
+	while (command[j] && !std::isspace(command[j])) {
+		j++;
+	}
+	std::string channelName = command.substr(i, j - i);
+	//get password
+	i = j;
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	std::string password = command.substr(i);
+	//check if channel already exists
+	Channel * channel = getChannelByName(channelName);
+	if (channel) {
+		if (!channel->getPassword().empty() && channel->getPassword() != password) {
+			; //error <-- wrong password
+			return ;
+		}
+	}
+	else {
+		channel = createChannel(channelName);
+		channel->setPassword(password);
+	}
+	//reply
+	std::string rpl;
+	rpl = ":ircserv 332 " + user->getNickName() + " #" + channel->getName() + " :Channel Topic\n";
+	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+	rpl = ":ircserv 333 " + user->getNickName() + " #" + channel->getName() + " operator 1234567890\n";
+	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+	rpl = ":prefix JOIN " + channel->getName() + "\n";
+	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+}
+
+void	Server::pass(std::string command, User * user) {
+	size_t i = 0;
+	i += 4;								 // <-- skip PASS
+	while (std::isspace(command[i])) {
+		i++;
+	}
+	if (command[i] != ':') {
+		;//error
+		return ;
+	}
+	i++;
+	command = command.substr(i);
+	if (command != this->_password) {
+		;//error
+		return ;
+	}
+	user->authorize();
+	//send message to client?
+}
 
 void	Server::welcome(User * user) {
 	std::string nickname = user->getNickName();
@@ -67,72 +202,30 @@ void	Server::welcome(User * user) {
 	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
 }
 
-void	Server::newConnection(void) {
-	int userSocket = accept(_serverSocket, NULL, NULL);
-	if (userSocket == -1) {
-		std::cerr << "Connection error" << std::endl;
-		return ;
-	}
-	std::cout << "New connection accepted, user_fd [" << userSocket << "]" << std::endl;
-	//User * newUser = this->createUser(userSocket);
-	this->createUser(userSocket);
-
-	//this->welcome(newUser); 						// <-- server reply to client (when? after user sent info?)
-}
-
-void	Server::join(std::string command, User * user)
-{
-	//JOIN #<channel_name> <password>
-	std::string rpl;
-	rpl = ":ircserv 332 lamici #canale :Channel Topic\n";
-	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
-	rpl = ":ircserv 333 lamici #canale operator 1234567890\n";
-	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
-	rpl = ":ircserv JOIN canale\n";
-	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
-}
-
 void	Server::authorization(std::string command, User *user) {
 	//here I can expect either CAP LS 302 or PASS command
-	size_t i = 0;
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	command = command.substr(i);
 	if (command.length() > 3 && !command.compare(0, 3, "CAP") && std::isspace(command[3])) {
 		;
 	}
 	else if (command.length() > 4 && !command.compare(0, 4, "PASS") && std::isspace(command[4])) {
-		if (!this->pass(command, user)) {
-			user->authorize();
-		}
+		this->pass(command, user);
 	}
 }
 
 void	Server::login(std::string command, User *user) {
-	//here I can expect either NICK or USER command
-	size_t i = 0;
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	command = command.substr(i);
 	if (command.length() > 4 && !command.compare(0, 4, "NICK") && std::isspace(command[4])) {
 		this->nick(command, user);
 	}
 	else if (command.length() > 4 && !command.compare(0, 4, "USER") && std::isspace(command[4])) {
 		this->user(command, user);
 	}
-	if (user->getNickName() != "" && user->getUserName() != "") {
+	if (!user->getNickName().empty() && !user->getUserName().empty()) {
 		user->authenticate();
+		this->welcome(user);
 	}
 }
 
 void	Server::dealCommand(std::string command, User *user) {
-	size_t i = 0;
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	command = command.substr(i);
 	//commands
 	if (command.length() > 3 && !command.compare(0, 3, "CAP") && std::isspace(command[3])) {
 		;
@@ -186,19 +279,29 @@ int Server::dealMessage(int userFd) {
 		ptr->setMessage(ptr->getMessage() + buffer);
 		if (ptr->getMessage().find('\n') != std::string::npos) {
 			if (!ptr->isAuthorized()) {
-				this->authorization(ptr->getMessage(), ptr);
+				this->authorization(strTrim(ptr->getMessage()), ptr);
 			}
 			else if (!ptr->isAuthenticated()) {
-				this->login(ptr->getMessage(), ptr);
+				this->login(strTrim(ptr->getMessage()), ptr);
 			}
 			else {
-				this->dealCommand(ptr->getMessage(), ptr);
+				this->dealCommand(strTrim(ptr->getMessage()), ptr);
 			}
 			std::cout << "[" << ptr->getFd() << "]: " << ptr->getMessage() << std::endl;
 			ptr->setMessage("");
 		}
 		return (0);
     }
+}
+
+void	Server::newConnection(void) {
+	int userSocket = accept(_serverSocket, NULL, NULL);
+	if (userSocket == -1) {
+		std::cerr << "Connection error" << std::endl;
+		return ;
+	}
+	std::cout << "New connection accepted, user_fd [" << userSocket << "]" << std::endl;
+	this->createUser(userSocket);
 }
 
 void	Server::loop(void) {
@@ -332,7 +435,7 @@ User *	Server::getUserByFd(int userFd) const {
 
 }
 
-User *	Server::getUserByName(const std::string & userName) const {
+User *	Server::getUserByUserName(const std::string & userName) const {
 	std::map<int, User *>::const_iterator it = this->_users.begin();
 	while (it != this->_users.end() && it->second->getUserName() != userName) {
 		++it;
@@ -358,7 +461,16 @@ User *	Server::createUser(int fd) {
 }
 
 void	Server::removeUser(int userFd) {
-	if (this->_users.find(userFd) != this->_users.end()) {							
+	if (this->_users.find(userFd) != this->_users.end()) {
+
+ 		//remove user from channels
+		std::string userName = this->getUserByFd(userFd)->getUserName();
+		for (std::map<std::string, Channel *>::iterator it = _channels.begin(); it != _channels.end(); it++) {
+			if (it->second->isUserPresent(userName)) {	
+				it->second->removeUser(userName);
+			}
+		}
+
 		delete (this->_users[userFd]);										// <-- delete User *
 		this->_users.erase(userFd);											// <-- remove user from map
 
@@ -410,3 +522,9 @@ delete [] (client_n_str);
 
 //std::string RPL_PONG =		"PONG :pong";
 //send(fd, RPL_PONG.c_str(), RPL_PONG.length(), MSG);
+
+
+//CAP :  c==3
+//PASS : c==3
+//NICK : c==3
+//USER : c==3
