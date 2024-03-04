@@ -47,56 +47,45 @@ Server::~Server(void) {
 }
 
 //--------------------------------------------------
-void	Server::user(std::string command, User * user) {
+void	Server::user(std::vector<std::string> argv, User * user) {
 	//USER <username>
-	std::vector<std::string> vec = splitString(command);
-	if (vec.size() < 2) {
+	if (argv.size() < 2) {
 		; //error
 	}
-	else if (getUserByUserName(vec[1])) {
+	else if (getUserByUserName(argv[1])) {
 		; //error <-- user already exists
 	}
 	else {
-		user->setUserName(vec[1]);
+		user->setUserName(argv[1]);
 	}
 }
 
-void	Server::nick(std::string command, User * user) {
+void	Server::nick(std::vector<std::string> argv, User * user) {
 	//NICK <nickname>
-	std::vector<std::string> vec = splitString(command);
-	if (vec.size() < 2) {
+	if (argv.size() < 2) {
 		; //error
 	}
 	else {
-		user->setNickName(vec[1]);
+		user->setNickName(argv[1]);
 	}
 }
 
-void	Server::privmsg(std::string command, User * user) {
-	//PRIVMSG   <user>    <message>
-	bool	destChannel = false;
-	size_t i = 0;
-	i += 7; // <-- skip PRIVMSG
-	while (std::isspace(command[i])) {
-		i++;
+void	Server::privmsg(std::vector<std::string> argv, User * user) {
+	//PRIVMSG <user/channel> <message>
+	if (argv.size() < 3) {
+		//error <-- not enough arguments
+		return ;
 	}
-	if (command[i] == '#') {
-		i++;
-		destChannel = true;
+	bool		isDestChannel = false;
+	std::string	destName = argv[1];
+	if (destName[0] == '#') {
+		isDestChannel = true;
+		destName = destName.erase(0, 1);
 	}
-	size_t j = i;
-	while (command[j] && !std::isspace(command[j])) {
-		j++;
-	}
-	std::string dest = command.substr(i, j - i);
-	i = j;
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	std::string msgText = command.substr(i);
+	std::string msgText = argv[2];
 	if (!msgText.empty()) {
-		if (destChannel) {
-			Channel * channelDest = this->getChannelByName(dest);
+		if (isDestChannel) {
+			Channel * channelDest = this->getChannelByName(destName);
 			if (channelDest) {
 				//send message to all user in channel
 			}
@@ -105,7 +94,7 @@ void	Server::privmsg(std::string command, User * user) {
 			}
 		}
 		else {
-			User * userDest = this->getUserByUserName(dest);
+			User * userDest = this->getUserByUserName(destName);
 			if (userDest) {
 				//send message to user
 			}
@@ -116,42 +105,42 @@ void	Server::privmsg(std::string command, User * user) {
 	}
 }
 
-void	Server::join(std::string command, User * user) {
-	//JOIN #abc <password>
-	size_t i = 0;
-	i += 4; // <-- skip JOIN
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	if (command[i] != '#') {
+void	Server::join(std::vector<std::string> argv, User * user) {
+	//JOIN <ch1,ch2,...,chn> <key1,key2,...,keyn>
+	if (argv.size() < 2) {
 		; //error
-		return ;
+		return;
 	}
-	i++;
-	//get channel name
-	size_t j = i;
-	while (command[j] && !std::isspace(command[j])) {
-		j++;
+	std::vector<std::string> channelVec = splitString(argv[1], ',');	// <-- split into channel vector
+	std::vector<std::string> keyVec;
+	if (argv.size() > 2) {
+		keyVec = splitString(argv[2], ','); 							// <-- split into password vector
 	}
-	std::string channelName = command.substr(i, j - i);
-	//get password
-	i = j;
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	std::string password = command.substr(i);
-	//check if channel already exists
-	Channel * channel = getChannelByName(channelName);
-	if (channel) {
-		if (!channel->getPassword().empty() && channel->getPassword() != password) {
-			; //error <-- wrong password
-			return ;
+	for (size_t i = 0; i < channelVec.size(); ++i) {
+		Channel * channel = getChannelByName(channelVec[i]);
+		if (channel) {
+			if (channel->isInviteOnly()) {
+				; //error <-- cannot join
+			}
+			else if (!channel->getPassword().empty() && i >= keyVec.size()) {
+				; //error <-- user didn't send password
+			}
+			else if (!channel->getPassword().empty() && (channel->getPassword() != keyVec[i])) {
+				; //error <-- password doesn't match
+			}
+			else {
+				; //password not needed or correct
+			}
+		}
+		else {
+			channel = createChannel(channelVec[i]);
+			if (i < keyVec.size() && !keyVec[i].empty()) {
+				channel->setPassword(keyVec[i]);
+			}
+			//send message to user
 		}
 	}
-	else {
-		channel = createChannel(channelName);
-		channel->setPassword(password);
-	}
+	/*
 	//reply
 	std::string rpl;
 	rpl = ":ircserv 332 " + user->getNickName() + " #" + channel->getName() + " :Channel Topic\n";
@@ -160,21 +149,42 @@ void	Server::join(std::string command, User * user) {
 	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
 	rpl = ":prefix JOIN " + channel->getName() + "\n";
 	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
+	*/
 }
 
-void	Server::pass(std::string command, User * user) {
-	size_t i = 0;
-	i += 4;								 // <-- skip PASS
-	while (std::isspace(command[i])) {
-		i++;
-	}
-	if (command[i] != ':') {
-		;//error
+void	Server::kick(std::vector<std::string> argv, User * user) {
+	//KICK <#channel> <user> <message>
+	if (argv.size() < 3) {
+		//error
 		return ;
 	}
-	i++;
-	command = command.substr(i);
-	if (command != this->_password) {
+	if (argv[1][0] != '#') {
+		; //error
+		return ;
+	}
+	std::string channelName = argv[1].substr(1);
+	std::string userName = argv[2];
+	Channel * channel = getChannelByName(channelName);
+	if (channel) {
+		if (!channel->isUserOperator(user->getUserName())) {
+			; //error <-- user is not operator
+		}
+		else {
+			channel->removeUser(userName);
+			if (argv.size() > 3 && !argv[3].empty()) {
+				; //send message?
+			}
+		}
+	}
+}
+
+void	Server::pass(std::vector<std::string> argv, User * user) {
+	//PASS <password>
+	if (argv.size() < 2) {
+		; //error
+		return;
+	}
+	if (argv[1] != this->_password) {
 		;//error
 		return ;
 	}
@@ -202,22 +212,28 @@ void	Server::welcome(User * user) {
 	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
 }
 
-void	Server::authorization(std::string command, User *user) {
+void	Server::authorization(std::vector<std::string> argv, User *user) {
 	//here I can expect either CAP LS 302 or PASS command
-	if (command.length() > 3 && !command.compare(0, 3, "CAP") && std::isspace(command[3])) {
+	if (argv.empty()) {
+		return;
+	}
+	else if (argv[0] == "CAP") {
 		;
 	}
-	else if (command.length() > 4 && !command.compare(0, 4, "PASS") && std::isspace(command[4])) {
-		this->pass(command, user);
+	else if (argv[0] == "PASS") {
+		this->pass(argv, user);
 	}
 }
 
-void	Server::login(std::string command, User *user) {
-	if (command.length() > 4 && !command.compare(0, 4, "NICK") && std::isspace(command[4])) {
-		this->nick(command, user);
+void	Server::login(std::vector<std::string> argv, User *user) {
+	if (argv.empty()) {
+		return;
 	}
-	else if (command.length() > 4 && !command.compare(0, 4, "USER") && std::isspace(command[4])) {
-		this->user(command, user);
+	else if (argv[0] == "NICK") {
+		this->nick(argv, user);
+	}
+	else if (argv[0] == "USER") {
+		this->user(argv, user);
 	}
 	if (!user->getNickName().empty() && !user->getUserName().empty()) {
 		user->authenticate();
@@ -225,32 +241,35 @@ void	Server::login(std::string command, User *user) {
 	}
 }
 
-void	Server::dealCommand(std::string command, User *user) {
+void	Server::dealCommand(std::vector<std::string> argv, User *user) {
+	if (argv.empty()) {
+		return;
+	}
 	//commands
-	if (command.length() > 3 && !command.compare(0, 3, "CAP") && std::isspace(command[3])) {
+	else if (argv[0] == "CAP") {
 		;
 	}
-	else if (command.length() > 4 && !command.compare(0, 4, "NICK") && std::isspace(command[4])) {
-		this->nick(command, user);
+	else if (argv[0] == "NICK") {
+		this->nick(argv, user);
 	}
-	else if (command.length() > 4 && !command.compare(0, 4, "JOIN") && std::isspace(command[4])) {
-		this->join(command, user);
+	else if (argv[0] == "JOIN") {
+		this->join(argv, user);
 	}
-	else if (command.length() > 7 && !command.compare(0, 7, "PRIVMSG") && std::isspace(command[7])) {
-		this->privmsg(command, user);
+	else if (argv[0] == "PRIVMSG") {
+		this->privmsg(argv, user);
 	}
 	//operators only
-	else if (command.length() > 4 && !command.compare(0, 4, "KICK") && std::isspace(command[4])) {
-		this->kick(command, user);
+	else if (argv[0] == "KICK") {
+		this->kick(argv, user);
 	}
-	else if (command.length() > 6 && !command.compare(0, 6, "INVITE") && std::isspace(command[6])) {
-		this->invite(command, user);
+	else if (argv[0] == "INVITE") {
+		this->invite(argv, user);
 	}
-	else if (command.length() > 5 && !command.compare(0, 5, "TOPIC") && std::isspace(command[5])) {
-		this->topic(command, user);
+	else if (argv[0] == "TOPIC") {
+		this->topic(argv, user);
 	}
-	else if (command.length() > 4 && !command.compare(0, 4, "MODE") && std::isspace(command[4])) {
-		this->mode(command, user);
+	else if (argv[0] == "MODE") {
+		this->mode(argv, user);
 	}
 	else {
 		//unknown command <-- send to client?
@@ -278,14 +297,15 @@ int Server::dealMessage(int userFd) {
 		buffer[bytesRead] = '\0'; // <--- NECESSARY
 		ptr->setMessage(ptr->getMessage() + buffer);
 		if (ptr->getMessage().find('\n') != std::string::npos) {
+			std::vector<std::string> argv = parseInput(ptr->getMessage());
 			if (!ptr->isAuthorized()) {
-				this->authorization(strTrim(ptr->getMessage()), ptr);
+				this->authorization(argv, ptr);
 			}
 			else if (!ptr->isAuthenticated()) {
-				this->login(strTrim(ptr->getMessage()), ptr);
+				this->login(argv, ptr);
 			}
 			else {
-				this->dealCommand(strTrim(ptr->getMessage()), ptr);
+				this->dealCommand(argv, ptr);
 			}
 			std::cout << "[" << ptr->getFd() << "]: " << ptr->getMessage() << std::endl;
 			ptr->setMessage("");

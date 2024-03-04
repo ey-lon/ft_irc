@@ -26,23 +26,23 @@ class Server
 
 		//communication
 		void				welcome			(User * user);
-		void				authorization	(std::string command, User * user);
-		void				login			(std::string command, User * user);
-		void				dealCommand		(std::string command, User * user);
+		void				authorization	(std::vector<std::string> argv, User * user);
+		void				login			(std::vector<std::string> argv, User * user);
+		void				dealCommand		(std::vector<std::string> argv, User * user);
 		int					dealMessage		(int userFd);
 		void				newConnection	(void);
 
 		//commands
-		void				cap				(std::string command, User * user);
-		void				pass			(std::string command, User * user);
-		void				user			(std::string command, User * user);
-		void				nick			(std::string command, User * user);
-		void				join			(std::string command, User * user);
-		void				privmsg			(std::string command, User * user);
-		void				invite			(std::string command, User * user);
-		void				kick			(std::string command, User * user);
-		void				topic			(std::string command, User * user);
-		void				mode			(std::string command, User * user);
+		void				cap				(std::vector<std::string> argv, User * user);
+		void				pass			(std::vector<std::string> argv, User * user);
+		void				user			(std::vector<std::string> argv, User * user);
+		void				nick			(std::vector<std::string> argv, User * user);
+		void				join			(std::vector<std::string> argv, User * user);
+		void				privmsg			(std::vector<std::string> argv, User * user);
+		void				invite			(std::vector<std::string> argv, User * user);
+		void				kick			(std::vector<std::string> argv, User * user);
+		void				topic			(std::vector<std::string> argv, User * user);
+		void				mode			(std::vector<std::string> argv, User * user);
 
 	public:
 		Server(void); // <-- only for testing (to be removed)

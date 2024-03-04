@@ -19,7 +19,7 @@ std::string strTrim(const std::string & s) {
 }
 
 #include <sstream>
-std::vector<std::string> splitString(const std::string& input) {
+std::vector<std::string>	splitString(const std::string & input) {
     std::vector<std::string> result;
     std::istringstream iss(input);
     std::string token;
@@ -27,6 +27,31 @@ std::vector<std::string> splitString(const std::string& input) {
     while (iss >> token) {
         result.push_back(token);
     }
-
     return result;
+}
+
+std::vector<std::string>	splitString(const std::string & input, char delimiter) {
+    std::vector<std::string> result;
+    std::stringstream ss(input);
+    std::string token;
+
+    while (std::getline(ss, token, delimiter)) {
+        result.push_back(strTrim(token));
+    }
+	return (result);
+}
+
+std::vector<std::string>	parseInput(const std::string & input) {
+	std::string	str = strTrim(input);
+	size_t colonPos = str.find(':');
+	std::string	spacedString;
+	if (colonPos != std::string::npos) {
+		spacedString = strTrim(str.substr(colonPos + 1));
+		str = str.substr(0, colonPos);
+	}
+	std::vector<std::string> vec = splitString(str);
+	if (!spacedString.empty()) {
+		vec.push_back(spacedString);
+	}
+	return (vec);
 }
