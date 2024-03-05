@@ -69,6 +69,7 @@ class Server
 		//users
 		User *				getUserByFd(int userFd) const;
 		User *				getUserByUserName(const std::string & userName) const;
+		User *				getUserByNickName(const std::string & nickName) const;
 		User *				createUser(int fd);
 		void				removeUser(int userFd);
 };

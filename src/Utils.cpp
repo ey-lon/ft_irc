@@ -42,9 +42,10 @@ std::vector<std::string>	splitString(const std::string & input, char delimiter) 
 }
 
 std::vector<std::string>	parseInput(const std::string & input) {
-	std::string	str = strTrim(input);
+	std::string	str = input;
 	size_t colonPos = str.find(':');
 	std::string	spacedString;
+
 	if (colonPos != std::string::npos) {
 		spacedString = strTrim(str.substr(colonPos + 1));
 		str = str.substr(0, colonPos);

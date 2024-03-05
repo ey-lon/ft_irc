@@ -3,13 +3,13 @@
 
 //--------------------------------------------------
 //constructors, destructors, ...
-Channel::Channel(void) : _isInviteOnly(false) {}
+Channel::Channel(void) : _usersLimit(0) {}
 
-Channel::Channel(const std::string & channelName) : _name(channelName), _isInviteOnly(false) {}
+Channel::Channel(const std::string & channelName) : _name(channelName), _usersLimit(0) {}
 
 Channel::~Channel(void) {
-	for (std::map<std::string, t_user *>::const_iterator it = _users.begin(); it != this->_users.end(); ++it) {
-		delete (it->second);
+	for (std::map<User *, bool>::const_iterator it = _users.begin(); it != this->_users.end(); ++it) {
+		delete (it->first);
 	}
 	_users.clear();
 }
@@ -28,8 +28,20 @@ const std::string	Channel::getTopic(void) const {
 	return (this->_topic);
 }
 
-bool	Channel::isInviteOnly(void) const {
-	return (this->_isInviteOnly);
+const std::string	Channel::getMode(void) const {
+	return (this->_mode);
+}
+
+int	Channel::getUsersLimit(void) const {
+	return (_usersLimit);
+}
+
+int	Channel::nUsers(void) const {
+	return (_users.size());
+}
+
+bool	Channel::hasFlag(char flag) const {
+	return (this->_mode.find(flag) != std::string::npos);
 }
 
 //--------------------------------------------------
@@ -46,53 +58,90 @@ void	Channel::setTopic(const std::string & topic) {
 	this->_topic = topic;
 }
 
-void	Channel::setInviteOnly(bool isInviteOnly) {
-	this->_isInviteOnly = isInviteOnly;
+void	Channel::addMode(const std::string & mode) {
+	for (size_t i = 0; i < mode.length(); i++) {
+		if (this->_mode.find(mode[i]) == std::string::npos) {
+			this->_mode.push_back(mode[i]);
+		}
+	}
+}
+
+void	Channel::removeMode(const std::string & mode) {
+	for (size_t i = 0; i < mode.length(); i++) {
+		if (this->_mode.find(mode[i]) != std::string::npos) {
+			this->_mode.erase(mode[i]);
+		}
+	}
 }
 
 //--------------------------------------------------
 //users
-bool	Channel::isUserPresent(const std::string & userName) const {
-	return (this->_users.find(userName) != this->_users.end());
+User *	Channel::getUserByNickName(const std::string & nickName) const {
+	std::map<User *, bool>::const_iterator it = _users.begin();
+	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+		++it;
+	}
+	if (it != this->_users.end()) {
+		return (it->first);
+	}
+	else {
+		return (NULL);
+	}
 }
 
-bool	Channel::isUserOperator(const std::string & userName) const {
-	std::map<std::string, t_user *>::const_iterator it = this->_users.find(userName);
-	if (it != this->_users.end()) {
-		return (it->second->isOperator);
+bool	Channel::isUserPresent(const std::string & nickName) const {
+	std::map<User *, bool>::const_iterator it = _users.begin();
+	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+		++it;
 	}
-	return (false);
+	return (it != this->_users.end());
+}
+
+bool	Channel::isUserOperator(const std::string & nickName) const {
+	std::map<User *, bool>::const_iterator it = _users.begin();
+	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+		++it;
+	}
+	return (it != this->_users.end() && it->second);
 }
 
 void	Channel::addUser(User * user) {
-	if (user && this->_users.find(user->getUserName()) == this->_users.end()) 	{
-		t_user * newUser = new t_user;
-		newUser->userPtr = user;
-		newUser->isOperator = false;
-		this->_users.insert(std::make_pair(user->getUserName(), newUser));
+	if (user && this->_users.find(user) == this->_users.end()) 	{
+		this->_users.insert(std::make_pair(user, false));
 	}
 }
 
-void	Channel::removeUser(const std::string & userName) {
-	if (this->_users.find(userName) != this->_users.end()) 	{
-		//this->_users[userName]->userPtr->removeChannel(this->_name);
-		delete (this->_users[userName]);
-		this->_users.erase(userName);
+void	Channel::removeUser(const std::string & nickName) {
+	std::map<User *, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+		++it;
+	}
+	if (it != _users.end()) {
+		this->_users.erase(it);
 	}
 }
 
-void	Channel::promoteUser(const std::string & userName) {
-	if (this->_users.find(userName) != this->_users.end()) {
-		this->_users[userName]->isOperator = true;
+void	Channel::promoteUser(const std::string & nickName) {
+	std::map<User *, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+		++it;
+	}
+	if (it != _users.end()) {
+		it->second = true;;
 	}
 }
 
-void	Channel::demoteUser(const std::string & userName) {
-	if (this->_users.find(userName) != this->_users.end()) {
-		this->_users[userName]->isOperator = false;
+void	Channel::demoteUser(const std::string & nickName) {
+	std::map<User *, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+		++it;
+	}
+	if (it != _users.end()) {
+		it->second = false;;
 	}
 }
 
+/* 
 void Channel::sendJoinMessageBack(const std::string & username) {
 	std::string RPL_JOIN = ":lamici!irc_serv JOIN #canale\r\n";
     std::string RPL_NAMREPLY = ":ircserv 353 lamici = #canale :lamici\r\n";
@@ -102,4 +151,4 @@ void Channel::sendJoinMessageBack(const std::string & username) {
     send(user->getFd(), RPL_CHANNELMODEIS.c_str(), RPL_CHANNELMODEIS.length(), MSG);
     send(user->getFd(), RPL_NAMREPLY.c_str(), RPL_NAMREPLY.length(), MSG);
     send(user->getFd(), RPL_WHOISOPERATOR.c_str(), RPL_WHOISOPERATOR.length(), MSG);
-}
+} */

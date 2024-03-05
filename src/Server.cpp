@@ -46,7 +46,33 @@ Server::~Server(void) {
 	this->_users.clear();
 }
 
+//==================================================
+//COMMANDS
+
 //--------------------------------------------------
+//authorization
+void	Server::cap(std::vector<std::string> argv, User * user) {
+	//CAP LS/REQ/ACK
+
+	//ignore Client Capabilities Negotiation always?
+}
+
+void	Server::pass(std::vector<std::string> argv, User * user) {
+	//PASS <password>
+	if (argv.size() < 2) {
+		; //error
+		return;
+	}
+	if (argv[1] != this->_password) {
+		;//error
+		return ;
+	}
+	user->authorize();
+	//send message to client?
+}
+
+//--------------------------------------------------
+//authentication
 void	Server::user(std::vector<std::string> argv, User * user) {
 	//USER <username>
 	if (argv.size() < 2) {
@@ -65,26 +91,27 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 	if (argv.size() < 2) {
 		; //error
 	}
+	else if (getUserByNickName(argv[1])) {
+		; //error <-- user already exists
+	}
 	else {
 		user->setNickName(argv[1]);
 	}
 }
 
+//--------------------------------------------------
+//other
 void	Server::privmsg(std::vector<std::string> argv, User * user) {
-	//PRIVMSG <user/channel> <message>
+	//PRIVMSG <nickname/channel> <message>
 	if (argv.size() < 3) {
 		//error <-- not enough arguments
 		return ;
 	}
-	bool		isDestChannel = false;
 	std::string	destName = argv[1];
-	if (destName[0] == '#') {
-		isDestChannel = true;
-		destName = destName.erase(0, 1);
-	}
 	std::string msgText = argv[2];
 	if (!msgText.empty()) {
-		if (isDestChannel) {
+		if (destName[0] == '#') {
+			destName.erase(0, 1);
 			Channel * channelDest = this->getChannelByName(destName);
 			if (channelDest) {
 				//send message to all user in channel
@@ -94,19 +121,19 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 			}
 		}
 		else {
-			User * userDest = this->getUserByUserName(destName);
+			User * userDest = this->getUserByNickName(destName);
 			if (userDest) {
-				//send message to user
+				; //send message to user
 			}
 			else {
-				//user not found
+				; //user not found
 			}
 		}
 	}
 }
 
 void	Server::join(std::vector<std::string> argv, User * user) {
-	//JOIN <ch1,ch2,...,chn> <key1,key2,...,keyn>
+	//JOIN <ch1,ch2,...,chn> [<key1,key2,...,keyn>]
 	if (argv.size() < 2) {
 		; //error
 		return;
@@ -117,60 +144,61 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		keyVec = splitString(argv[2], ','); 							// <-- split into password vector
 	}
 	for (size_t i = 0; i < channelVec.size(); ++i) {
+		if (channelVec[i][0] == '#') {
+			channelVec[i].erase(0, 1);
+		}
 		Channel * channel = getChannelByName(channelVec[i]);
-		if (channel) {
-			if (channel->isInviteOnly()) {
-				; //error <-- cannot join
+		if (channel) {	// <-- channel exists
+			if (channel->hasFlag(i)) {
+				;//error <-- channel is invite only, user cannot join
 			}
 			else if (!channel->getPassword().empty() && i >= keyVec.size()) {
-				; //error <-- user didn't send password
+				;//error <-- password needed but user didn't send it
 			}
 			else if (!channel->getPassword().empty() && (channel->getPassword() != keyVec[i])) {
-				; //error <-- password doesn't match
+				;//error <-- password needed but it doesn't match
 			}
-			else {
-				; //password not needed or correct
+			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers())
+			{
+				;//error <-- too many users
+			}
+			else { //user can join because password is not needed or matches
+				channel->addUser(user);
+				//send REPLY messages to users
 			}
 		}
-		else {
+		else {			// <-- channel doesn't exist
 			channel = createChannel(channelVec[i]);
 			if (i < keyVec.size() && !keyVec[i].empty()) {
 				channel->setPassword(keyVec[i]);
 			}
-			//send message to user
+			channel->addUser(user);
+			channel->promoteUser(user->getNickName());
+			//send REPLY messages to users
 		}
 	}
-	/*
-	//reply
-	std::string rpl;
-	rpl = ":ircserv 332 " + user->getNickName() + " #" + channel->getName() + " :Channel Topic\n";
-	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
-	rpl = ":ircserv 333 " + user->getNickName() + " #" + channel->getName() + " operator 1234567890\n";
-	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
-	rpl = ":prefix JOIN " + channel->getName() + "\n";
-	send(user->getFd(), rpl.c_str(), rpl.length(), MSG);
-	*/
 }
 
+//--------------------------------------------------
+//operators only
 void	Server::kick(std::vector<std::string> argv, User * user) {
-	//KICK <#channel> <user> <message>
+	//KICK <#channel> <nickname> [<message>]
 	if (argv.size() < 3) {
 		//error
 		return ;
 	}
-	if (argv[1][0] != '#') {
-		; //error
-		return ;
+	std::string channelName = argv[1];
+	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
+		channelName.erase(0, 1); // remove #
 	}
-	std::string channelName = argv[1].substr(1);
-	std::string userName = argv[2];
+	std::string nickName = argv[2];
 	Channel * channel = getChannelByName(channelName);
 	if (channel) {
-		if (!channel->isUserOperator(user->getUserName())) {
+		if (!channel->isUserOperator(user->getNickName())) {
 			; //error <-- user is not operator
 		}
 		else {
-			channel->removeUser(userName);
+			channel->removeUser(nickName);
 			if (argv.size() > 3 && !argv[3].empty()) {
 				; //send message?
 			}
@@ -178,19 +206,96 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 	}
 }
 
-void	Server::pass(std::vector<std::string> argv, User * user) {
-	//PASS <password>
-	if (argv.size() < 2) {
-		; //error
-		return;
-	}
-	if (argv[1] != this->_password) {
-		;//error
+void	Server::invite(std::vector<std::string> argv, User * user) {
+	//INVITE <nickname> <channel>
+
+	if (argv.size() < 3) {
+		//error
 		return ;
 	}
-	user->authorize();
-	//send message to client?
+	std::string channelName = argv[2];
+	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
+		channelName.erase(0, 1); // remove #
+	}
+	std::string nickName = argv[1];
+	Channel * channel = this->getChannelByName(channelName);
+	if (channel) {
+		if (!channel->isUserOperator(user->getNickName())) {
+			; //error: user is not operator
+		}
+		else {
+			User * userInv = getUserByNickName(nickName);
+			if (userInv) {
+				channel->addUser(userInv);
+			}
+			else {
+				; //error: user to invite not found
+			}			
+		}
+	}
+	else {
+		; //error: channel not found
+	}
 }
+
+void	Server::topic(std::vector<std::string> argv, User * user) {
+	//TOPIC <channel> [<topic>]
+	if (argv.size() < 2) {
+		return ;
+	}
+	std::string channelName = argv[1];
+	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
+		channelName.erase(0, 1); // remove #
+	}
+	Channel * channel = this->getChannelByName(channelName);
+	if (channel) {
+		if (channel->hasFlag('t') && !channel->isUserOperator(user->getNickName())) {
+			//error: user is not operator
+		}
+		else {
+			if (argv.size() > 2) {
+				channel->setTopic(argv[2]);
+			}
+			else {
+				; //view topic
+			}
+		}
+	}
+	else {
+		; //error: channel not found
+	}
+}
+
+void	Server::mode(std::vector<std::string> argv, User * user) {
+	//MODE <channel> {[+|-]|o|p|s|i|t|n|b|v} [<limit>] [<user>] [<ban mask>]
+
+	if (argv.size() < 3) { //user didn't send channel or flags
+		return ;
+	}
+	std::string channelName = argv[1];
+	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
+		channelName.erase(0, 1); // remove #
+	}
+	Channel * channel = this->getChannelByName(channelName);
+	if (channel) {
+		if (!channel->isUserOperator(user->getNickName())) {
+			//error: user is not operator
+		}
+		else {
+			if (argv.size() > 2) {
+				channel->setTopic(argv[2]);
+			}
+			else {
+				; //view topic
+			}
+		}
+	}
+	else {
+		; //error: channel not found
+	}
+}
+
+//==================================================
 
 void	Server::welcome(User * user) {
 	std::string nickname = user->getNickName();
@@ -458,6 +563,19 @@ User *	Server::getUserByFd(int userFd) const {
 User *	Server::getUserByUserName(const std::string & userName) const {
 	std::map<int, User *>::const_iterator it = this->_users.begin();
 	while (it != this->_users.end() && it->second->getUserName() != userName) {
+		++it;
+	}
+	if (it != this->_users.end()) {
+		return (it->second);
+	}
+	else {
+		return (NULL);
+	}
+}
+
+User *	Server::getUserByNickName(const std::string & nickName) const {
+	std::map<int, User *>::const_iterator it = this->_users.begin();
+	while (it != this->_users.end() && it->second->getNickName() != nickName) {
 		++it;
 	}
 	if (it != this->_users.end()) {
