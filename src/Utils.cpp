@@ -56,3 +56,24 @@ std::vector<std::string>	parseInput(const std::string & input) {
 	}
 	return (vec);
 }
+
+bool	isCorrectName(const std::string & name) {
+	for (size_t i = 0; i < name.length(); i++) {
+		if (!std::isalnum(name[i]) && name[i] != '_' && name[i] != '-') {
+			return (false);
+		}
+	}
+	return (true);
+}
+
+bool	isCorrectPassword(const std::string & password) {
+	if (password.empty()) {
+		return (false);
+	}
+	else if (std::isspace(password[0]) || std::isspace(password[password.length() - 1])) {
+		return (false);
+	}
+	else {
+		return (true);
+	}
+}
