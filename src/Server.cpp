@@ -168,7 +168,9 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		else {			// <-- channel doesn't exist
 			channel = createChannel(channelVec[i]);
 			if (i < keyVec.size() && !keyVec[i].empty()) {
-				channel->setPassword(keyVec[i]);
+				//if () { //password check
+					channel->setPassword(keyVec[i]);
+				//}
 			}
 			channel->addUser(user);
 			channel->promoteUser(user->getNickName());
