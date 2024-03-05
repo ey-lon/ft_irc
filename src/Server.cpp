@@ -168,7 +168,7 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		else {			// <-- channel doesn't exist
 			channel = createChannel(channelVec[i]);
 			if (i < keyVec.size() && !keyVec[i].empty()) {
-				//if () { //password check
+				//if (...) { //password check
 					channel->setPassword(keyVec[i]);
 				//}
 			}
@@ -674,48 +674,3 @@ void	Server::removeUser(int userFd) {
 		}
 	}
 }
-
-//--------------------------------------------------
-//UNUSED
-/*
-void	set username(User * user, const std::string & userName) {
-	if (this->_channels.find(userName) == this->_channels.end()) {
-		user->setUserName(userName);
-	}
-	else {
-		std::cerr << "Error: cannot set username to: " << userName << ", user already exists." << std::endl;
-	}
-}
-*/
-
-/*
-void	set channelname (Channel * channel, const std::string & channelName) {
-	if (this->_channels.find(channelName) == this->_channels.end()) {
-		channel->setName(channelName);
-	}
-	else {
-		std::cerr << "Error: cannot set channel name to: " << channelName << ", channel already exists." << std::endl;
-	}
-}
-*/
-
-//temporary user name -------------------------------
-/*
-int length = snprintf(NULL, 0, "%d", userSocket) + 1;
-char * client_n_str = new char[length];
-sprintf(client_n_str, "%d", userSocket);
-std::string client_name = "user fd.";
-client_name.append(client_n_str);
-delete [] (client_n_str);
-*/
-//---------------------------------------------------
-
-
-//std::string RPL_PONG =		"PONG :pong";
-//send(fd, RPL_PONG.c_str(), RPL_PONG.length(), MSG);
-
-
-//CAP :  c==3
-//PASS : c==3
-//NICK : c==3
-//USER : c==3
