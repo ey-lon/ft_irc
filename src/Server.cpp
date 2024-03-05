@@ -135,7 +135,6 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 void	Server::join(std::vector<std::string> argv, User * user) {
 	//JOIN <ch1,ch2,...,chn> [<key1,key2,...,keyn>]
 	if (argv.size() < 2) {
-		; //error
 		return;
 	}
 	std::vector<std::string> channelVec = splitString(argv[1], ',');	// <-- split into channel vector
