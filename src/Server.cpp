@@ -6,10 +6,11 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include <netdb.h>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <string>
-#include <netdb.h>
 
 #define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
 
@@ -60,15 +61,15 @@ void	Server::cap(std::vector<std::string> argv, User * user) {
 void	Server::pass(std::vector<std::string> argv, User * user) {
 	//PASS <password>
 	if (argv.size() < 2) {
-		; //error
-		return;
-	}
-	if (argv[1] != this->_password) {
-		;//error
 		return ;
 	}
-	user->authorize();
-	//send message to client?
+	else if (argv[1] != this->_password) {
+		; //error: password doesn't match
+	}
+	else {
+		user->authorize();
+		//send message to client?
+	}
 }
 
 //--------------------------------------------------
@@ -79,7 +80,7 @@ void	Server::user(std::vector<std::string> argv, User * user) {
 		; //error
 	}
 	else if (getUserByUserName(argv[1])) {
-		; //error <-- user already exists
+		; //error: user already exists
 	}
 	else {
 		user->setUserName(argv[1]);
@@ -92,7 +93,7 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 		; //error
 	}
 	else if (getUserByNickName(argv[1])) {
-		; //error <-- user already exists
+		; //error: user already exists
 	}
 	else {
 		user->setNickName(argv[1]);
@@ -104,7 +105,6 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 void	Server::privmsg(std::vector<std::string> argv, User * user) {
 	//PRIVMSG <nickname/channel> <message>
 	if (argv.size() < 3) {
-		//error <-- not enough arguments
 		return ;
 	}
 	std::string	destName = argv[1];
@@ -117,7 +117,7 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 				//send message to all user in channel
 			}
 			else {
-				//channel not found
+				//error: channel not found
 			}
 		}
 		else {
@@ -126,7 +126,7 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 				; //send message to user
 			}
 			else {
-				; //user not found
+				; //error: user not found
 			}
 		}
 	}
@@ -150,17 +150,16 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		Channel * channel = getChannelByName(channelVec[i]);
 		if (channel) {	// <-- channel exists
 			if (channel->hasFlag(i)) {
-				;//error <-- channel is invite only, user cannot join
+				;//error: channel is invite only, user cannot join
 			}
 			else if (!channel->getPassword().empty() && i >= keyVec.size()) {
-				;//error <-- password needed but user didn't send it
+				;//error: password needed but user didn't send it
 			}
 			else if (!channel->getPassword().empty() && (channel->getPassword() != keyVec[i])) {
-				;//error <-- password needed but it doesn't match
+				;//error: password needed, user sent it but it doesn't match
 			}
-			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers())
-			{
-				;//error <-- too many users
+			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers()) {
+				;//error: too many users
 			}
 			else { //user can join because password is not needed or matches
 				channel->addUser(user);
@@ -184,7 +183,6 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 void	Server::kick(std::vector<std::string> argv, User * user) {
 	//KICK <#channel> <nickname> [<message>]
 	if (argv.size() < 3) {
-		//error
 		return ;
 	}
 	std::string channelName = argv[1];
@@ -195,12 +193,12 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 	Channel * channel = getChannelByName(channelName);
 	if (channel) {
 		if (!channel->isUserOperator(user->getNickName())) {
-			; //error <-- user is not operator
+			; //error: user is not operator
 		}
 		else {
 			channel->removeUser(nickName);
 			if (argv.size() > 3 && !argv[3].empty()) {
-				; //send message?
+				; //send optional message
 			}
 		}
 	}
@@ -208,9 +206,7 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 
 void	Server::invite(std::vector<std::string> argv, User * user) {
 	//INVITE <nickname> <channel>
-
 	if (argv.size() < 3) {
-		//error
 		return ;
 	}
 	std::string channelName = argv[2];
@@ -250,15 +246,13 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 	Channel * channel = this->getChannelByName(channelName);
 	if (channel) {
 		if (channel->hasFlag('t') && !channel->isUserOperator(user->getNickName())) {
-			//error: user is not operator
+			; //error: user is not operator
+		}
+		else if (argv.size() > 2) {
+			channel->setTopic(argv[2]);
 		}
 		else {
-			if (argv.size() > 2) {
-				channel->setTopic(argv[2]);
-			}
-			else {
-				; //view topic
-			}
+			; //view topic
 		}
 	}
 	else {
@@ -267,8 +261,7 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 }
 
 void	Server::mode(std::vector<std::string> argv, User * user) {
-	//MODE <channel> {[+|-]|o|p|s|i|t|n|b|v} [<limit>] [<user>] [<ban mask>]
-
+	//MODE <channel> {[+|-]|i|t|k|o|l} [<limit>] [<user>]
 	if (argv.size() < 3) { //user didn't send channel or flags
 		return ;
 	}
@@ -279,14 +272,73 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 	Channel * channel = this->getChannelByName(channelName);
 	if (channel) {
 		if (!channel->isUserOperator(user->getNickName())) {
-			//error: user is not operator
+			; //error: user is not operator
 		}
 		else {
-			if (argv.size() > 2) {
-				channel->setTopic(argv[2]);
+			std::string flags = argv[2];
+			int ac = 0;
+			if (flags[0] == '+') {
+				for (size_t i = 1; i < flags.length(); i++) {
+					if (flags[i] == 'o') {
+						if (argv.size() > 3 + ac) {
+							User * user = channel->getUserByNickName(argv[3 + ac]);
+							if (user) {
+								channel->promoteUser(user->getNickName());
+							}
+							else {
+								; //error: user not in channel
+							}
+							ac++;
+						}
+						else {
+							; //error: missing nickname
+						}
+					}
+					else if (flags[i] == 'l') {
+						if (argv.size() > 3 + ac) {
+							channel->setUsersLimit(std::atoi(argv[3 + ac].c_str()));
+							channel->addMode('l');
+							ac++;
+						}
+						else {
+							; //error: missing users_limit
+						}
+					}
+					else if (flags[i] == 'i' || flags[i] == 't' || flags[i] == 'k') {
+						channel->addMode(flags[i]);
+					}
+					else {
+						; //error: unknown flag
+					}
+				}
+			}
+			else if (flags[0] == '-') {
+				for (size_t i = 1; i < flags.length(); i++) {
+					if (flags[i] == 'o') {
+						if (argv.size() > 3 + ac) {
+							User * user = channel->getUserByNickName(argv[3 + ac]);
+							if (user) {
+								channel->demoteUser(user->getNickName());
+							}
+							else {
+								; //error: user not in channel
+							}
+							ac++;
+						}
+						else {
+							; //error: missing nickname
+						}
+					}
+					else if (flags[i] == 'l' || flags[i] == 'i' || flags[i] == 't' || flags[i] == 'k') {
+						channel->removeMode(flags[i]);
+					}
+					else {
+						; //error: unknown flag
+					}
+				}
 			}
 			else {
-				; //view topic
+				; //error: flags don't start with +/-
 			}
 		}
 	}

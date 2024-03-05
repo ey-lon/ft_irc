@@ -32,8 +32,11 @@ class Channel
 		void				setName(const std::string & name);
 		void				setPassword(const std::string & password);
 		void				setTopic(const std::string & topic);
+		void				setUsersLimit(int);
 		void				addMode(const std::string & mode);
+		void				addMode(char flag);
 		void				removeMode(const std::string & mode);
+		void				removeMode(char flag);
 
 		//users
 		User *				getUserByNickName(const std::string & nickName) const;

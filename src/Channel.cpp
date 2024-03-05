@@ -58,6 +58,10 @@ void	Channel::setTopic(const std::string & topic) {
 	this->_topic = topic;
 }
 
+void	Channel::setUsersLimit(int userLimit) {
+	this->_usersLimit = userLimit;
+}
+
 void	Channel::addMode(const std::string & mode) {
 	for (size_t i = 0; i < mode.length(); i++) {
 		if (this->_mode.find(mode[i]) == std::string::npos) {
@@ -66,11 +70,23 @@ void	Channel::addMode(const std::string & mode) {
 	}
 }
 
+void	Channel::addMode(char flag) {
+	if (this->_mode.find(flag) == std::string::npos) {
+		this->_mode.push_back(flag);
+	}
+}
+
 void	Channel::removeMode(const std::string & mode) {
 	for (size_t i = 0; i < mode.length(); i++) {
 		if (this->_mode.find(mode[i]) != std::string::npos) {
 			this->_mode.erase(mode[i]);
 		}
+	}
+}
+
+void	Channel::removeMode(char flag) {
+	if (this->_mode.find(flag) != std::string::npos) {
+		this->_mode.erase(flag);
 	}
 }
 
