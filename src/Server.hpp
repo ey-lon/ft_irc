@@ -12,6 +12,7 @@ class User;
 class Server
 {
 	private:
+		const std::string					_serverName;
 		int									_serverSocket;
 		sockaddr_in							_serverAddress;
 		char								_hostname[256];
@@ -56,6 +57,7 @@ class Server
 		void				loop(void);
 
 		//getters
+		const std::string &	getName(void) const;
 		const std::string &	getPassword(void) const;
 		int					getPort(void) const;
 		int					nUsers(void) const;

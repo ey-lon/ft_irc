@@ -14,12 +14,13 @@
 #include <string>
 
 #define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
+#define SRV_NAME "ircserv"
 
 //--------------------------------------------------
 //constructors, destructors, ...
-Server::Server(void) {}
+Server::Server(void) : _serverName(SRV_NAME) {}
 
-Server::Server(int port, const std::string & password) {
+Server::Server(int port, const std::string & password) : _serverName(SRV_NAME) {
 	if (port >= 0 && port <= USHRT_MAX) {
 		this->_port = port;
 	}
@@ -34,7 +35,7 @@ Server::Server(int port, const std::string & password) {
 	}
 }
 
-Server::Server(const std::string & port, const std::string & password) {
+Server::Server(const std::string & port, const std::string & password) : _serverName(SRV_NAME) {
 	if (isValidPort(port)) {
 		this->_port = std::atoi(port.c_str());
 	}
@@ -113,7 +114,7 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 		; //error: user already exists
 	}
 	else {
-		std::string rplNick = ":" + user->getNickName() + "!irc_serv NICK " + argv[1] + "\r\n";
+		std::string rplNick = ":" + user->getNickName() + "!" + this->getName() + " NICK " + argv[1] + "\r\n";
 		user->setNickName(argv[1]);
 		for (std::map<int, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
 			send(it->second->getFd(), rplNick.c_str(), rplNick.length(), MSG);
@@ -131,18 +132,24 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 	std::string	destName = argv[1];
 	std::string msgText = argv[2];
 	if (!msgText.empty()) {
-		msgText = user->getNickName() + " " + argv[0] + " " + destName + " :" + msgText + "\r\n";
+		msgText = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " " + destName + " :" + msgText + "\r\n";
 		if (destName[0] == '#') {
+			//send msg to all user of channel
 			destName.erase(0, 1);
 			Channel * channelDest = this->getChannelByName(destName);
 			if (channelDest) {
-				; //send message to all user in channel
+				for (std::map<User *, bool>::const_iterator it = channelDest->getUsers().begin(); it != channelDest->getUsers().end(); ++it) {
+					if (user->getNickName() != it->first->getNickName()) {
+						send(it->first->getFd(), msgText.c_str(), msgText.length(), MSG);
+					}
+				}
 			}
 		}
 		else {
+			//send message to user
 			User * userDest = this->getUserByNickName(destName);
 			if (userDest && userDest->getNickName() != user->getNickName()) {
-				send(userDest->getFd(), msgText.c_str(), msgText.length(), MSG); //send message to user
+				send(userDest->getFd(), msgText.c_str(), msgText.length(), MSG);
 			}
 		}
 	}
@@ -226,9 +233,9 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 		}
 		else {
 			channel->removeUser(nickName);
-			std::string rplKick = ":" + user->getNickName() + "!irc_serv KICK #" + channel->getName() + " " + argv[2];
+			std::string rplKick = ":" + user->getNickName() + "!" + this->getName() + " KICK #" + channel->getName() + " " + argv[2];
 			if (argv.size() > 3 && !argv[3].empty()) {
-				rplKick += " :" + argv[3]; //send optional message
+				rplKick += " :" + argv[3]; //append optional message
 			}
 			rplKick += "\r\n";
 			for (std::map<int, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
@@ -287,7 +294,8 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 			channel->setTopic(argv[2]);
 		}
 		else {
-			; //view topic
+			std::string rplTopic;
+			send(user->getFd(), "", 0, MSG); //view topic
 		}
 	}
 	else {
@@ -396,8 +404,8 @@ void	Server::ping(std::vector<std::string> argv, User * user) {
 //==================================================
 
 void Server::joinMsg(Channel *channel, User *user) {
-	std::string rplJoin = ":" + user->getNickName() + "!irc_serv JOIN #" + channel->getName() + "\r\n";
-    std::string	rplUserList = ":ircserv 353 " + user->getNickName() + " = #" + channel->getName() + " :";
+	std::string rplJoin = ":" + user->getNickName() + "!" + this->getName() + " JOIN #" + channel->getName() + "\r\n";
+    std::string	rplUserList = ":" + this->getName() + " 353 " + user->getNickName() + " = #" + channel->getName() + " :";
 
 	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
 		send(it->first->getFd(), rplJoin.c_str(), rplJoin.length(), MSG);
@@ -410,23 +418,23 @@ void Server::joinMsg(Channel *channel, User *user) {
 		}
 	}
 
-	std::string rpltopic = ":ircserv 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
-	send(user->getFd(), rpltopic.c_str(), rpltopic.length(), MSG);
+	std::string rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+	send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
 
-    std::string rplchannelmodes = ":ircserv 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
+    std::string rplMode = ":" + this->getName() + " 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
 	if (channel->hasFlag('l')) {
-		rplchannelmodes += " " + channel->getUsersLimit();
+		rplMode += " " + channel->getUsersLimit();
 	}
 	if (channel->hasFlag('k') && channel->getPassword().length() > 0) {
-		rplchannelmodes += " " + channel->getPassword();
+		rplMode += " " + channel->getPassword();
 	}
-	rplchannelmodes += "\r\n";
-    send(user->getFd(), rplchannelmodes.c_str(), rplchannelmodes.length(), MSG);
+	rplMode += "\r\n";
+    send(user->getFd(), rplMode.c_str(), rplMode.length(), MSG);
 	send(user->getFd(), rplUserList.c_str(), rplUserList.length(), MSG);
 	
 	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
 		if (channel->isUserOperator(it->first->getNickName())) {
-   			std::string rploplist = ":ircserv MODE #" + channel->getName() + " +o " + it->first->getNickName() + "\r\n";
+   			std::string rploplist = ":" + this->getName() + " MODE #" + channel->getName() + " +o " + it->first->getNickName() + "\r\n";
 			send(user->getFd(), rploplist.c_str(), rploplist.length(), MSG);
 		}
 	}
@@ -434,13 +442,13 @@ void Server::joinMsg(Channel *channel, User *user) {
 
 void	Server::welcomeMsg(User * user) {
 	std::string nickname = user->getNickName();
-	std::string RPL_WELCOME =	":ircserv 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
-	std::string RPL_YOURHOST =	":ircserv 002 " + nickname + " :Your host is " + _hostname + " , running version 42 \r\n";
-	std::string RPL_CREATED = 	":ircserv 003 " + nickname + " :This server was created 30/10/2023\r\n";
-	std::string RPL_MYINFO = 	":ircserv 004 " + nickname + " ircsev 42 +o +l+i+k+t\r\n";
-	std::string RPL_ISUPPORT =	":ircserv 005 " + nickname + " operator ban limit invite key topic :are supported by this server\r\n";
-	std::string RPL_MOTD =		":ircserv 372 " + nickname + " : Welcome to the ircserv\r\n";
-	std::string RPL_ENDOFMOTD =	":ircserv 376 " + nickname + " :End of MOTD command\r\n";
+	std::string RPL_WELCOME =	":" + this->getName() + " 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
+	std::string RPL_YOURHOST =	":" + this->getName() + " 002 " + nickname + " :Your host is " + this->_hostname + " , running version 42 \r\n";
+	std::string RPL_CREATED = 	":" + this->getName() + " 003 " + nickname + " :This server was created 30/10/2023\r\n";
+	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircsev 42 +o +l+i+k+t\r\n";
+	std::string RPL_ISUPPORT =	":" + this->getName() + " 005 " + nickname + " operator ban limit invite key topic :are supported by this server\r\n";
+	std::string RPL_MOTD =		":" + this->getName() + " 372 " + nickname + " : Welcome to " + this->getName() + "\r\n";
+	std::string RPL_ENDOFMOTD =	":" + this->getName() + " 376 " + nickname + " :End of MOTD command\r\n";
 
 	int fd = user->getFd();
 	send(fd, RPL_WELCOME.c_str(), RPL_WELCOME.length(), MSG);
@@ -633,6 +641,10 @@ void	Server::start(void) {
 
 //--------------------------------------------------
 //getters
+const std::string &	Server::getName(void) const {
+	return (this->_serverName);
+}
+
 const std::string &	Server::getPassword(void) const {
 	return (this->_password);
 }
