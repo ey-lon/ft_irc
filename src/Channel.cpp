@@ -44,6 +44,10 @@ bool	Channel::hasFlag(char flag) const {
 	return (this->_mode.find(flag) != std::string::npos);
 }
 
+const std::map <User *, bool> &	Channel::getUsers(void) const {
+	return (this->_users);
+}
+
 //--------------------------------------------------
 //setters
 void	Channel::setName(const std::string & name) {
@@ -156,15 +160,3 @@ void	Channel::demoteUser(const std::string & nickName) {
 		it->second = false;;
 	}
 }
-
-/* 
-void Channel::sendJoinMessageBack(const std::string & username) {
-	std::string RPL_JOIN = ":lamici!irc_serv JOIN #canale\r\n";
-    std::string RPL_NAMREPLY = ":ircserv 353 lamici = #canale :lamici\r\n";
-    std::string RPL_WHOISOPERATOR = ":ircserv MODE #canale +o lamici\r\n";
-    std::string RPL_CHANNELMODEIS = ":ircserv 324 lamici #canale +t\r\n";
-    send(user->getFd(), RPL_JOIN.c_str(), RPL_JOIN.length(), MSG);
-    send(user->getFd(), RPL_CHANNELMODEIS.c_str(), RPL_CHANNELMODEIS.length(), MSG);
-    send(user->getFd(), RPL_NAMREPLY.c_str(), RPL_NAMREPLY.length(), MSG);
-    send(user->getFd(), RPL_WHOISOPERATOR.c_str(), RPL_WHOISOPERATOR.length(), MSG);
-} */

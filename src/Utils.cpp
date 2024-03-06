@@ -1,4 +1,6 @@
 #include "Utils.hpp"
+#include <cstdlib>
+#include <climits>
 
 std::string strTrim(const std::string & s) {
 	std::string str = s;
@@ -11,7 +13,7 @@ std::string strTrim(const std::string & s) {
 		return (str);
 	}
 	size_t j = str.length() - 1;
-	while (j >= 0 && std::isspace(str[j])) {
+	while (std::isspace(str[j])) {
 		j--;
 	}
 	str = str.substr(i, j - i + 1);
@@ -57,7 +59,10 @@ std::vector<std::string>	parseInput(const std::string & input) {
 	return (vec);
 }
 
-bool	isCorrectName(const std::string & name) {
+bool	isValidName(const std::string & name) {
+	if (name.empty() || std::isspace(name[0]) || std::isspace(name[name.length() - 1])) {
+		return (false);
+	}
 	for (size_t i = 0; i < name.length(); i++) {
 		if (!std::isalnum(name[i]) && name[i] != '_' && name[i] != '-') {
 			return (false);
@@ -66,14 +71,24 @@ bool	isCorrectName(const std::string & name) {
 	return (true);
 }
 
-bool	isCorrectPassword(const std::string & password) {
-	if (password.empty()) {
-		return (false);
-	}
-	else if (std::isspace(password[0]) || std::isspace(password[password.length() - 1])) {
+bool	isValidPassword(const std::string & password) {
+	if (password.empty() || std::isspace(password[0]) || std::isspace(password[password.length() - 1])) {
 		return (false);
 	}
 	else {
 		return (true);
 	}
+}
+
+bool	isValidPort(const std::string & port) {
+	if (port.empty()) {
+		return (false);
+	}
+	for (size_t i = 0; i < port.length(); ++i) {
+		if (!std::isdigit(port[i])) {
+			return (false);
+		}
+	}
+	int res = std::atoi(port.c_str());
+	return (res >= 0 && res < USHRT_MAX);
 }

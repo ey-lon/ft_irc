@@ -9,6 +9,7 @@
 #include <netdb.h>
 #include <cstdio>
 #include <cstdlib>
+#include <climits>
 #include <iostream>
 #include <string>
 
@@ -16,22 +17,36 @@
 
 //--------------------------------------------------
 //constructors, destructors, ...
-Server::Server(void) : _port(6667) {}
+Server::Server(void) {}
 
 Server::Server(int port, const std::string & password) {
-	//if (...) { //port error check
+	if (port >= 0 && port <= USHRT_MAX) {
 		this->_port = port;
-	//}
-	/* else {
-		throw (std::exception());
-	} */
-
-	//if (...) { //password error check
+	}
+	else {
+		throw ("invalid port");
+	}
+	if (isValidPassword(password)) {
 		this->_password = password;
-	//}
-	/* else {
-		throw (std::exception());
-	} */
+	}
+	else {
+		throw ("invalid password");
+	}
+}
+
+Server::Server(const std::string & port, const std::string & password) {
+	if (isValidPort(port)) {
+		this->_port = std::atoi(port.c_str());
+	}
+	else {
+		throw ("invalid port");
+	}
+	if (isValidPassword(password)) {
+		this->_password = password;
+	}
+	else {
+		throw ("invalid password");
+	}
 }
 
 Server::~Server(void) {
@@ -55,6 +70,8 @@ Server::~Server(void) {
 void	Server::cap(std::vector<std::string> argv, User * user) {
 	//CAP LS/REQ/ACK
 
+	(void)argv;
+	(void)user;
 	//ignore Client Capabilities Negotiation always?
 }
 
@@ -96,7 +113,11 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 		; //error: user already exists
 	}
 	else {
+		std::string rplNick = ":" + user->getNickName() + "!irc_serv NICK " + argv[1] + "\r\n";
 		user->setNickName(argv[1]);
+		for (std::map<int, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
+			send(it->second->getFd(), rplNick.c_str(), rplNick.length(), MSG);
+		}
 	}
 }
 
@@ -110,23 +131,18 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 	std::string	destName = argv[1];
 	std::string msgText = argv[2];
 	if (!msgText.empty()) {
+		msgText = user->getNickName() + " " + argv[0] + " " + destName + " :" + msgText + "\r\n";
 		if (destName[0] == '#') {
 			destName.erase(0, 1);
 			Channel * channelDest = this->getChannelByName(destName);
 			if (channelDest) {
-				//send message to all user in channel
-			}
-			else {
-				//error: channel not found
+				; //send message to all user in channel
 			}
 		}
 		else {
 			User * userDest = this->getUserByNickName(destName);
-			if (userDest) {
-				; //send message to user
-			}
-			else {
-				; //error: user not found
+			if (userDest && userDest->getNickName() != user->getNickName()) {
+				send(userDest->getFd(), msgText.c_str(), msgText.length(), MSG); //send message to user
 			}
 		}
 	}
@@ -151,10 +167,10 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 			if (channel->hasFlag(i)) {
 				;//error: channel is invite only, user cannot join
 			}
-			else if (!channel->getPassword().empty() && i >= keyVec.size()) {
+			else if (!channel->hasFlag('k') && i >= keyVec.size()) {
 				;//error: password needed but user didn't send it
 			}
-			else if (!channel->getPassword().empty() && (channel->getPassword() != keyVec[i])) {
+			else if (!channel->hasFlag('k') && (channel->getPassword() != keyVec[i])) {
 				;//error: password needed, user sent it but it doesn't match
 			}
 			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers()) {
@@ -162,19 +178,31 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 			}
 			else { //user can join because password is not needed or matches
 				channel->addUser(user);
-				//send REPLY messages to users
+				this->joinMsg(channel, user); //send JOIN messages to users
 			}
 		}
-		else {			// <-- channel doesn't exist
-			channel = createChannel(channelVec[i]);
+		else if (isValidName(channelVec[i])) {			// <-- channel doesn't exist
 			if (i < keyVec.size() && !keyVec[i].empty()) {
-				//if (...) { //password check
+				if (isValidPassword(keyVec[i])) {
+					channel = createChannel(channelVec[i]);
 					channel->setPassword(keyVec[i]);
-				//}
+					channel->addMode('k');
+				}
+				else {
+					; // error: invalid password <-- won't create channel
+				}
 			}
-			channel->addUser(user);
-			channel->promoteUser(user->getNickName());
-			//send REPLY messages to users
+			else {
+				channel = createChannel(channelVec[i]);
+			}
+			if (channel) {
+				channel->addUser(user);
+				channel->promoteUser(user->getNickName());
+				this->joinMsg(channel, user); //send JOIN messages to users
+			}
+		}
+		else {
+			; //error: channel doesn't exist but user provided invalid name 
 		}
 	}
 }
@@ -198,8 +226,13 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 		}
 		else {
 			channel->removeUser(nickName);
+			std::string rplKick = ":" + user->getNickName() + "!irc_serv KICK #" + channel->getName() + " " + argv[2];
 			if (argv.size() > 3 && !argv[3].empty()) {
-				; //send optional message
+				rplKick += " :" + argv[3]; //send optional message
+			}
+			rplKick += "\r\n";
+			for (std::map<int, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
+				send(it->second->getFd(), rplKick.c_str(), rplKick.length(), MSG);
 			}
 		}
 	}
@@ -224,6 +257,7 @@ void	Server::invite(std::vector<std::string> argv, User * user) {
 			User * userInv = getUserByNickName(nickName);
 			if (userInv) {
 				channel->addUser(userInv);
+				this->joinMsg(channel, userInv);
 			}
 			else {
 				; //error: user to invite not found
@@ -277,7 +311,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 		}
 		else {
 			std::string flags = argv[2];
-			int ac = 0;
+			size_t ac = 0;
 			if (flags[0] == '+') {
 				for (size_t i = 1; i < flags.length(); i++) {
 					if (flags[i] == 'o') {
@@ -348,14 +382,62 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 	}
 }
 
+void	Server::ping(std::vector<std::string> argv, User * user) {
+	std::string pong;
+	if (argv.size() > 1) {
+		pong = "PONG " + argv[1] + "\r\n";
+	}
+	else {
+		pong = "PONG\r\n";
+	}
+	send(user->getFd(), pong.c_str(), pong.length(), MSG);
+}
+
 //==================================================
 
-void	Server::welcome(User * user) {
+void Server::joinMsg(Channel *channel, User *user) {
+	std::string rplJoin = ":" + user->getNickName() + "!irc_serv JOIN #" + channel->getName() + "\r\n";
+    std::string	rplUserList = ":ircserv 353 " + user->getNickName() + " = #" + channel->getName() + " :";
+
+	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
+		send(it->first->getFd(), rplJoin.c_str(), rplJoin.length(), MSG);
+		rplUserList += it->first->getNickName();
+		if(it != --channel->getUsers().end()) {
+			rplUserList += " ";
+		}
+		else {
+			rplUserList += "\r\n";
+		}
+	}
+
+	std::string rpltopic = ":ircserv 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+	send(user->getFd(), rpltopic.c_str(), rpltopic.length(), MSG);
+
+    std::string rplchannelmodes = ":ircserv 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
+	if (channel->hasFlag('l')) {
+		rplchannelmodes += " " + channel->getUsersLimit();
+	}
+	if (channel->hasFlag('k') && channel->getPassword().length() > 0) {
+		rplchannelmodes += " " + channel->getPassword();
+	}
+	rplchannelmodes += "\r\n";
+    send(user->getFd(), rplchannelmodes.c_str(), rplchannelmodes.length(), MSG);
+	send(user->getFd(), rplUserList.c_str(), rplUserList.length(), MSG);
+	
+	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
+		if (channel->isUserOperator(it->first->getNickName())) {
+   			std::string rploplist = ":ircserv MODE #" + channel->getName() + " +o " + it->first->getNickName() + "\r\n";
+			send(user->getFd(), rploplist.c_str(), rploplist.length(), MSG);
+		}
+	}
+}
+
+void	Server::welcomeMsg(User * user) {
 	std::string nickname = user->getNickName();
 	std::string RPL_WELCOME =	":ircserv 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
 	std::string RPL_YOURHOST =	":ircserv 002 " + nickname + " :Your host is " + _hostname + " , running version 42 \r\n";
 	std::string RPL_CREATED = 	":ircserv 003 " + nickname + " :This server was created 30/10/2023\r\n";
-	std::string RPL_MYINFO = 	":ircserv 004 " + nickname + " ircsev 42 +o +b+l+i+k+t\r\n";
+	std::string RPL_MYINFO = 	":ircserv 004 " + nickname + " ircsev 42 +o +l+i+k+t\r\n";
 	std::string RPL_ISUPPORT =	":ircserv 005 " + nickname + " operator ban limit invite key topic :are supported by this server\r\n";
 	std::string RPL_MOTD =		":ircserv 372 " + nickname + " : Welcome to the ircserv\r\n";
 	std::string RPL_ENDOFMOTD =	":ircserv 376 " + nickname + " :End of MOTD command\r\n";
@@ -395,7 +477,7 @@ void	Server::login(std::vector<std::string> argv, User *user) {
 	}
 	if (!user->getNickName().empty() && !user->getUserName().empty()) {
 		user->authenticate();
-		this->welcome(user);
+		this->welcomeMsg(user);
 	}
 }
 
@@ -428,6 +510,9 @@ void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 	}
 	else if (argv[0] == "MODE") {
 		this->mode(argv, user);
+	}
+	else if (argv[0] == "PING") {
+		this->ping(argv, user);
 	}
 	else {
 		//unknown command <-- send to client?
@@ -567,9 +652,9 @@ int	Server::nChannels(void) const {
 //--------------------------------------------------
 //setters
 void	Server::setPassword(const std::string &password) {
-	//if (...) { //password error check
+	if (isValidPassword(password)) {
 		this->_password = password;
-	//}
+	}
 }
 
 //--------------------------------------------------

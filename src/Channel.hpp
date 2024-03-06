@@ -20,6 +20,7 @@ class Channel
 		~Channel(void);
 		
 		//getters
+		const std::map <User *, bool> &	getUsers(void) const;
 		const std::string	getName(void) const;
 		const std::string	getPassword(void) const;
 		const std::string	getTopic(void) const;

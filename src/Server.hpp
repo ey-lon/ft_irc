@@ -17,7 +17,7 @@ class Server
 		char								_hostname[256];
 
 		char *								_ip;
-		int									_port;
+		u_int16_t							_port;
 		std::string							_password;
 
 		std::map<std::string, Channel *>	_channels;
@@ -25,7 +25,8 @@ class Server
 		std::vector<pollfd>					_fds;
 
 		//communication
-		void				welcome			(User * user);
+		void				joinMsg			(Channel *channel, User *user);
+		void				welcomeMsg		(User * user);
 		void				authorization	(std::vector<std::string> argv, User * user);
 		void				login			(std::vector<std::string> argv, User * user);
 		void				dealCommand		(std::vector<std::string> argv, User * user);
@@ -43,10 +44,12 @@ class Server
 		void				kick			(std::vector<std::string> argv, User * user);
 		void				topic			(std::vector<std::string> argv, User * user);
 		void				mode			(std::vector<std::string> argv, User * user);
+		void				ping			(std::vector<std::string> argv, User * user);
 
 	public:
 		Server(void); // <-- only for testing (to be removed)
 		Server(int port, const std::string & password);
+		Server(const std::string & port, const std::string & password);
 		~Server(void);
 
 		void				start(void);

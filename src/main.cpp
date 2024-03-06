@@ -1,18 +1,19 @@
 #include "Server.hpp"
+#include "Utils.hpp"
 #include <iostream>
+#include <cstdlib>
 
-int main()
+int main(int ac, char **av)
 {
-	/* if (ac != 3)
+	if (ac != 3)
 	{
 		std::cerr << "Error: invalid arguments." << std::endl;
 		std::cout << "./ircserv <port> <password>" << std::endl;
 		return (1);
-	} */
+	}
 
 	try {
-		//Server server(av[1], av[2]);
-		Server server;
+		Server server(av[1], av[2]);
 
 		server.start();
 		server.loop();
