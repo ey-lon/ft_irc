@@ -12,6 +12,7 @@ class User;
 class Server
 {
 	private:
+		Server(void);
 		const std::string					_serverName;
 		int									_serverSocket;
 		sockaddr_in							_serverAddress;
@@ -48,9 +49,8 @@ class Server
 		void				ping			(std::vector<std::string> argv, User * user);
 
 	public:
-		Server(void); // <-- only for testing (to be removed)
-		Server(int port, const std::string & password);
-		Server(const std::string & port, const std::string & password);
+		Server(int port, const std::string & password);					//constructor where port is given as an int
+		Server(const std::string & port, const std::string & password); //constructor where port is given as a literal int
 		~Server(void);
 
 		void				start(void);

@@ -75,6 +75,9 @@ bool	isValidPassword(const std::string & password) {
 	if (password.empty() || std::isspace(password[0]) || std::isspace(password[password.length() - 1])) {
 		return (false);
 	}
+	else if (password.find(',') != std::string::npos || password == ".") {
+		return (false);
+	}
 	else {
 		return (true);
 	}

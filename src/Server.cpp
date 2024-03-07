@@ -171,14 +171,14 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		}
 		Channel * channel = getChannelByName(channelVec[i]);
 		if (channel) {	// <-- channel exists
-			if (channel->hasFlag(i)) {
+			if (channel->isUserPresent(user->getNickName())) {
+				;//user is already in channel
+			}
+			else if (channel->hasFlag('i')) {
 				;//error: channel is invite only, user cannot join
 			}
-			else if (!channel->hasFlag('k') && i >= keyVec.size()) {
-				;//error: password needed but user didn't send it
-			}
-			else if (!channel->hasFlag('k') && (channel->getPassword() != keyVec[i])) {
-				;//error: password needed, user sent it but it doesn't match
+			else if (channel->hasFlag('k') && (i >= keyVec.size() || channel->getPassword() != keyVec[i])) {
+				;//error: password needed but user didn't send it or doesn't match
 			}
 			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers()) {
 				;//error: too many users
@@ -189,7 +189,7 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 			}
 		}
 		else if (isValidName(channelVec[i])) {			// <-- channel doesn't exist
-			if (i < keyVec.size() && !keyVec[i].empty()) {
+			if (i < keyVec.size() && !keyVec[i].empty() && keyVec[i] != ".") {
 				if (isValidPassword(keyVec[i])) {
 					channel = createChannel(channelVec[i]);
 					channel->setPassword(keyVec[i]);
@@ -292,10 +292,21 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 		}
 		else if (argv.size() > 2) {
 			channel->setTopic(argv[2]);
+			std::string rplTopic;
+			rplTopic = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+			for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
+				send(it->first->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
+			}
 		}
 		else {
 			std::string rplTopic;
-			send(user->getFd(), "", 0, MSG); //view topic
+			if (channel->getTopic().empty()) {
+				rplTopic = ":" + this->getName() + " 331 " + user->getNickName() + " #" + channel->getName() + " :No topic is set" + "\r\n";
+			}
+			else {
+				rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+			}
+			send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
 		}
 	}
 	else {
@@ -349,6 +360,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 					}
 					else if (flags[i] == 'i' || flags[i] == 't' || flags[i] == 'k') {
 						channel->addMode(flags[i]);
+						//communicate with channel users <--
 					}
 					else {
 						; //error: unknown flag
@@ -374,6 +386,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 					}
 					else if (flags[i] == 'l' || flags[i] == 'i' || flags[i] == 't' || flags[i] == 'k') {
 						channel->removeMode(flags[i]);
+						//communicate with channel users <--
 					}
 					else {
 						; //error: unknown flag
@@ -418,7 +431,13 @@ void Server::joinMsg(Channel *channel, User *user) {
 		}
 	}
 
-	std::string rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+	std::string rplTopic;
+	if (channel->getTopic().empty()) {
+		rplTopic = ":" + this->getName() + " 331 " + user->getNickName() + " #" + channel->getName() + " :No topic is set" + "\r\n";
+	}
+	else {
+		rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+	}
 	send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
 
     std::string rplMode = ":" + this->getName() + " 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
@@ -530,16 +549,14 @@ void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 
 int Server::dealMessage(int userFd) {
 	User * ptr = this->getUserByFd(userFd);
-	if (!ptr) {												// <-- don't know how it could happen, but you never know.
-		std::cerr << "Error: User not found" << std::endl;
+	if (!ptr) {	// <-- don't know how it could happen, but you never know.
 		return (2);
 	}
 
-    char				buffer[1024];
+    char	buffer[1024];
     ssize_t bytesRead = recv(userFd, buffer, sizeof(buffer) - 1, 0);
     if (bytesRead <= 0) {
         std::cout << "Connection with user_fd [" << ptr->getFd() << "] terminated." << std::endl;
-		ptr->setMessage("");
         close(userFd);
 		this->removeUser(userFd);
 		return (1);
@@ -754,9 +771,7 @@ void	Server::removeUser(int userFd) {
  		//remove user from channels
 		std::string userName = this->getUserByFd(userFd)->getUserName();
 		for (std::map<std::string, Channel *>::iterator it = _channels.begin(); it != _channels.end(); it++) {
-			if (it->second->isUserPresent(userName)) {	
-				it->second->removeUser(userName);
-			}
+			it->second->removeUser(userName);
 		}
 
 		delete (this->_users[userFd]);										// <-- delete User *
