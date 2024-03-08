@@ -27,7 +27,8 @@ class Server
 		std::vector<pollfd>					_fds;
 
 		//communication
-		void				joinMsg			(Channel *channel, User *user);
+		void				channelMegaphone(Channel * channel, User * user, const std::string & msg);
+		void				joinMsg			(Channel * channel, User * user);
 		void				welcomeMsg		(User * user);
 		void				authorization	(std::vector<std::string> argv, User * user);
 		void				login			(std::vector<std::string> argv, User * user);
@@ -47,6 +48,7 @@ class Server
 		void				topic			(std::vector<std::string> argv, User * user);
 		void				mode			(std::vector<std::string> argv, User * user);
 		void				ping			(std::vector<std::string> argv, User * user);
+		void				part			(std::vector<std::string> argv, User * user);
 
 	public:
 		Server(int port, const std::string & password);					//constructor where port is given as an int

@@ -109,14 +109,6 @@ User *	Channel::getUserByNickName(const std::string & nickName) const {
 	}
 }
 
-bool	Channel::isUserPresent(const std::string & nickName) const {
-	std::map<User *, bool>::const_iterator it = _users.begin();
-	while (it != this->_users.end() && it->first->getNickName() != nickName) {
-		++it;
-	}
-	return (it != this->_users.end());
-}
-
 bool	Channel::isUserOperator(const std::string & nickName) const {
 	std::map<User *, bool>::const_iterator it = _users.begin();
 	while (it != this->_users.end() && it->first->getNickName() != nickName) {

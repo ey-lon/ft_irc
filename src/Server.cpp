@@ -138,11 +138,7 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 			destName.erase(0, 1);
 			Channel * channelDest = this->getChannelByName(destName);
 			if (channelDest) {
-				for (std::map<User *, bool>::const_iterator it = channelDest->getUsers().begin(); it != channelDest->getUsers().end(); ++it) {
-					if (user->getNickName() != it->first->getNickName()) {
-						send(it->first->getFd(), msgText.c_str(), msgText.length(), MSG);
-					}
-				}
+				this->channelMegaphone(channelDest, user, msgText);
 			}
 		}
 		else {
@@ -171,24 +167,27 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		}
 		Channel * channel = getChannelByName(channelVec[i]);
 		if (channel) {	// <-- channel exists
-			if (channel->isUserPresent(user->getNickName())) {
+			if (channel->getUserByNickName(user->getNickName())) {
 				;//user is already in channel
 			}
 			else if (channel->hasFlag('i')) {
-				;//error: channel is invite only, user cannot join
+				;//error: channel is invite only
 			}
 			else if (channel->hasFlag('k') && (i >= keyVec.size() || channel->getPassword() != keyVec[i])) {
-				;//error: password needed but user didn't send it or doesn't match
+				;//error: password needed, user didn't send it or it doesn't match
 			}
 			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers()) {
 				;//error: too many users
 			}
-			else { //user can join because password is not needed or matches
+			else { //user can join
 				channel->addUser(user);
+				if (channel->nUsers() == 1) {
+					channel->promoteUser(user->getNickName());
+				}
 				this->joinMsg(channel, user); //send JOIN messages to users
 			}
 		}
-		else if (isValidName(channelVec[i])) {			// <-- channel doesn't exist
+		else if (isValidName(channelVec[i])) {	// <-- channel doesn't exist
 			if (i < keyVec.size() && !keyVec[i].empty() && keyVec[i] != ".") {
 				if (isValidPassword(keyVec[i])) {
 					channel = createChannel(channelVec[i]);
@@ -212,6 +211,43 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 			; //error: channel doesn't exist but user provided invalid name 
 		}
 	}
+}
+
+void	Server::part(std::vector<std::string> argv, User * user) {
+	//PART <channel> [<message>]
+	if (argv.size() < 2) {
+		return ; //error: user did't send channel
+	}
+	std::string channelName = argv[1];
+	if (channelName[0] == '#') {
+		channelName.erase(0, 1);
+	}
+	Channel * channel = this->getChannelByName(channelName);
+	if (channel && channel->getUserByNickName(user->getNickName())) {
+		channel->removeUser(user->getNickName());
+		std::string rplMsg;
+		if (argv.size() > 2) {
+			rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + " :" + argv[2] + "\r\n";
+		}
+		else {
+			rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + "\r\n";
+		}
+		this->channelMegaphone(channel, NULL, rplMsg);
+	}
+	else {
+		; // error: channel doesn't exist or user is not in channel
+	}
+}
+
+void	Server::ping(std::vector<std::string> argv, User * user) {
+	std::string pong;
+	if (argv.size() > 1) {
+		pong = "PONG " + argv[1] + "\r\n";
+	}
+	else {
+		pong = "PONG\r\n";
+	}
+	send(user->getFd(), pong.c_str(), pong.length(), MSG);
 }
 
 //--------------------------------------------------
@@ -294,9 +330,7 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 			channel->setTopic(argv[2]);
 			std::string rplTopic;
 			rplTopic = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
-			for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
-				send(it->first->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
-			}
+			this->channelMegaphone(channel, NULL, rplTopic);
 		}
 		else {
 			std::string rplTopic;
@@ -315,7 +349,7 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 }
 
 void	Server::mode(std::vector<std::string> argv, User * user) {
-	//MODE <channel> {[+|-]|i|t|k|o|l} [<limit>] [<user>]
+	//MODE <channel> {[+|-]|i|t|k|o|l} [<user>] [<limit>] [<password>]
 	if (argv.size() < 3) { //user didn't send channel or flags
 		return ;
 	}
@@ -324,97 +358,118 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 		channelName.erase(0, 1); // remove #
 	}
 	Channel * channel = this->getChannelByName(channelName);
-	if (channel) {
-		if (!channel->isUserOperator(user->getNickName())) {
-			; //error: user is not operator
-		}
-		else {
-			std::string flags = argv[2];
-			size_t ac = 0;
-			if (flags[0] == '+') {
-				for (size_t i = 1; i < flags.length(); i++) {
-					if (flags[i] == 'o') {
-						if (argv.size() > 3 + ac) {
-							User * user = channel->getUserByNickName(argv[3 + ac]);
-							if (user) {
-								channel->promoteUser(user->getNickName());
-							}
-							else {
-								; //error: user not in channel
-							}
-							ac++;
-						}
-						else {
-							; //error: missing nickname
-						}
-					}
-					else if (flags[i] == 'l') {
-						if (argv.size() > 3 + ac) {
-							channel->setUsersLimit(std::atoi(argv[3 + ac].c_str()));
-							channel->addMode('l');
-							ac++;
-						}
-						else {
-							; //error: missing users_limit
-						}
-					}
-					else if (flags[i] == 'i' || flags[i] == 't' || flags[i] == 'k') {
-						channel->addMode(flags[i]);
-						//communicate with channel users <--
-					}
-					else {
-						; //error: unknown flag
-					}
-				}
-			}
-			else if (flags[0] == '-') {
-				for (size_t i = 1; i < flags.length(); i++) {
-					if (flags[i] == 'o') {
-						if (argv.size() > 3 + ac) {
-							User * user = channel->getUserByNickName(argv[3 + ac]);
-							if (user) {
-								channel->demoteUser(user->getNickName());
-							}
-							else {
-								; //error: user not in channel
-							}
-							ac++;
-						}
-						else {
-							; //error: missing nickname
-						}
-					}
-					else if (flags[i] == 'l' || flags[i] == 'i' || flags[i] == 't' || flags[i] == 'k') {
-						channel->removeMode(flags[i]);
-						//communicate with channel users <--
-					}
-					else {
-						; //error: unknown flag
-					}
-				}
-			}
-			else {
-				; //error: flags don't start with +/-
-			}
-		}
-	}
-	else {
+	if (!channel) {
 		; //error: channel not found
 	}
-}
-
-void	Server::ping(std::vector<std::string> argv, User * user) {
-	std::string pong;
-	if (argv.size() > 1) {
-		pong = "PONG " + argv[1] + "\r\n";
+	else if (!channel->isUserOperator(user->getNickName())) {
+		; //error: user is not operator
+	}
+	else if (argv[2][0] != '+' && argv[2][0] != '-') {
+		; //error: flags dont start with +/-
 	}
 	else {
-		pong = "PONG\r\n";
+		std::string flags = argv[2];
+		size_t argIndex = 3;
+		for (size_t i = 1; i < flags.length(); i++) {
+			if (flags[i] == 'o') {
+				if (argv.size() > argIndex) {
+					if (channel->getUserByNickName(argv[argIndex])) {
+						if (flags[0] == '+') {
+							channel->promoteUser(argv[argIndex]);
+						}
+						else {
+							channel->demoteUser(argv[argIndex]);
+						}
+						std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + " " + argv[argIndex] + "\r\n"; 
+						this->channelMegaphone(channel, NULL, rplMsg);
+					}
+					else {
+						; //error: user not in channel
+					}
+					argIndex++;
+				}
+				else {
+					; //error: missing nickname
+				}
+			}
+			else if (flags[i] == 'l') {
+				if (flags[0] == '+') {
+					if (argv.size() > argIndex) {
+						if (std::atoi(argv[argIndex].c_str()) > 0) {
+							channel->setUsersLimit(std::atoi(argv[argIndex].c_str()));
+							channel->addMode('l');
+							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + " " + argv[argIndex] + "\r\n"; 
+							this->channelMegaphone(channel, NULL, rplMsg);
+						}
+						else {
+							; //error: invalid users_limit
+						}
+						argIndex++;
+					}
+					else {
+						; //error: missing users_limit
+					}
+				}
+				else {
+					channel->removeMode(flags[i]);
+					std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + "\r\n"; 
+					this->channelMegaphone(channel, NULL, rplMsg);
+				}
+			}
+			else if (flags[i] == 'k') {
+				if (flags[0] == '+') {
+					if (argv.size() > argIndex) {
+						if (isValidPassword(argv[argIndex])) {
+							channel->setPassword(argv[argIndex]);
+							channel->addMode('k');
+							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + " " + argv[argIndex] + "\r\n"; 
+							this->channelMegaphone(channel, NULL, rplMsg);
+						}
+						else {
+							; //error: invalid password
+						}
+						argIndex++;
+					}
+					else {
+						; //error: missing password
+					}
+				}
+				else {
+					channel->removeMode(flags[i]);
+					std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + "\r\n"; 
+					this->channelMegaphone(channel, NULL, rplMsg);
+				}
+			}
+			else if (flags[i] == 'i' || flags[i] == 't') {
+				if (flags[0] == '+') {
+					channel->addMode(flags[i]);
+				}
+				else {
+					channel->removeMode(flags[i]);
+				}
+				std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + "\r\n"; 
+				this->channelMegaphone(channel, NULL, rplMsg);
+			}
+			else {
+				; //error: unknown flag
+			}
+		}
 	}
-	send(user->getFd(), pong.c_str(), pong.length(), MSG);
 }
 
 //==================================================
+
+void	Server::channelMegaphone(Channel * channel, User * user, const std::string & msg) {
+	if (!channel) {
+		return;
+	}
+	// user is to be ignored if not NULL
+	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
+		if (!user || user->getNickName() != it->first->getNickName()) {
+			send(it->first->getFd(), msg.c_str(), msg.length(), MSG);
+		}
+	}
+}
 
 void Server::joinMsg(Channel *channel, User *user) {
 	std::string rplJoin = ":" + user->getNickName() + "!" + this->getName() + " JOIN #" + channel->getName() + "\r\n";
@@ -453,8 +508,8 @@ void Server::joinMsg(Channel *channel, User *user) {
 	
 	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
 		if (channel->isUserOperator(it->first->getNickName())) {
-   			std::string rploplist = ":" + this->getName() + " MODE #" + channel->getName() + " +o " + it->first->getNickName() + "\r\n";
-			send(user->getFd(), rploplist.c_str(), rploplist.length(), MSG);
+   			std::string rplOpList = ":" + this->getName() + " MODE #" + channel->getName() + " +o " + it->first->getNickName() + "\r\n";
+			send(user->getFd(), rplOpList.c_str(), rplOpList.length(), MSG);
 		}
 	}
 }
@@ -786,3 +841,97 @@ void	Server::removeUser(int userFd) {
 		}
 	}
 }
+
+
+/* if (flags[0] == '+') {
+			for (size_t i = 1; i < flags.length(); i++) {
+				if (flags[i] == 'o') {
+					if (argv.size() > argIndex) {
+						User * user = channel->getUserByNickName(argv[argIndex]);
+						if (user && !channel->isUserOperator(user->getNickName())) {
+							channel->promoteUser(user->getNickName());
+							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " +" + flags[i] + " " + argv[argIndex] + "\r\n"; 
+							channelMegaphone(channel, NULL, rplMsg);
+						}
+						else {
+							; //error: user not in channel
+						}
+						argIndex++;
+					}
+					else {
+						; //error: missing nickname
+					}
+				}
+				else if (flags[i] == 'l') {
+					if (argv.size() > argIndex) {
+						if (std::atoi(argv[argIndex].c_str()) > 0) {
+							channel->setUsersLimit(std::atoi(argv[argIndex].c_str()));
+							channel->addMode('l');
+							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " +" + flags[i] + " " + argv[argIndex] + "\r\n"; 
+							channelMegaphone(channel, NULL, rplMsg);
+						}
+						else {
+							; //error: invalid users_limit
+						}
+						argIndex++;
+					}
+					else {
+						; //error: missing users_limit
+					}
+				}
+				else if (flags[i] == 'k') {
+					if (argv.size() > argIndex) {
+						if (isValidPassword(argv[argIndex])) {
+							channel->setPassword(argv[argIndex]);
+							channel->addMode('k');
+							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " +" + flags[i] + " " + argv[argIndex] + "\r\n"; 
+							channelMegaphone(channel, NULL, rplMsg);
+						}
+						else {
+							; //error: invalid password
+						}
+						argIndex++;
+					}
+					else {
+						; //error: missing password
+					}
+				}
+				else if (flags[i] == 'i' || flags[i] == 't') {
+					channel->addMode(flags[i]);
+					//communicate with channel users <--
+				}
+				else {
+					; //error: unknown flag
+				}
+			}
+		}
+		else if (flags[0] == '-') {
+			for (size_t i = 1; i < flags.length(); i++) {
+				if (flags[i] == 'o') {
+					if (argv.size() > argIndex) {
+						User * user = channel->getUserByNickName(argv[argIndex]);
+						if (user) {
+							channel->demoteUser(user->getNickName());
+						}
+						else {
+							; //error: user not in channel
+						}
+						argIndex++;
+					}
+					else {
+						; //error: missing nickname
+					}
+				}
+				else if (flags[i] == 'l' || flags[i] == 'k' || flags[i] == 'i' || flags[i] == 't') {
+					channel->removeMode(flags[i]);
+					std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channel->getName() + " -" + flags[i] + "\r\n";
+					channelMegaphone(channel, NULL, rplMsg);
+				}
+				else {
+					; //error: unknown flag
+				}
+			}
+		}
+		else {
+			; //error: flags don't start with +/-
+		} */

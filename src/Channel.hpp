@@ -41,7 +41,6 @@ class Channel
 
 		//users
 		User *				getUserByNickName(const std::string & nickName) const;
-		bool				isUserPresent(const std::string & nickName) const;
 		bool				isUserOperator(const std::string & nickName) const;
 		
 		void				addUser(User *user);
