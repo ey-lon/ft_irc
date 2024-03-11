@@ -1,17 +1,19 @@
 #include "User.hpp"
 #include "Channel.hpp"
+#include <unistd.h>
 
 //--------------------------------------------------
 //constructors, destructors, ...
-User::User(void) : _isAuthenticated(false), _isAuthorized(0) {}
+User::User(void) : _isAuthenticated(false), _isVerified(false) {}
 
-User::~User() {}
+User::~User() {
+	close(this->getFd());
+}
 
-User::User(int fd) : _isAuthenticated(false), _isAuthorized(0) {
+User::User(int fd) : _isAuthenticated(false), _isVerified(false) {
 	_pollFd.fd = fd;
 	_pollFd.events = POLLIN;
 	_pollFd.revents = 0;
-	//_nickName = "abettini";
 }
 
 //--------------------------------------------------
@@ -20,8 +22,8 @@ bool	User::isAuthenticated(void) const {
 	return (this->_isAuthenticated);
 }
 
-bool	User::isAuthorized(void) const {
-	return (this->_isAuthorized);
+bool	User::isVerified(void) const {
+	return (this->_isVerified);
 }
 
 pollfd	User::getPollFd(void) const {
@@ -58,8 +60,8 @@ void	User::authenticate() {
 	this->_isAuthenticated = true;
 }
 
-void	User::authorize() {
-	this->_isAuthorized = true;
+void	User::verify() {
+	this->_isVerified = true;
 }
 
 void	User::setUserName(const std::string & userName) {

@@ -8,9 +8,6 @@ Channel::Channel(void) : _usersLimit(0) {}
 Channel::Channel(const std::string & channelName) : _name(channelName), _usersLimit(0) {}
 
 Channel::~Channel(void) {
-	for (std::map<User *, bool>::const_iterator it = _users.begin(); it != this->_users.end(); ++it) {
-		delete (it->first);
-	}
 	_users.clear();
 }
 
@@ -82,15 +79,17 @@ void	Channel::addMode(char flag) {
 
 void	Channel::removeMode(const std::string & mode) {
 	for (size_t i = 0; i < mode.length(); i++) {
-		if (this->_mode.find(mode[i]) != std::string::npos) {
-			this->_mode.erase(mode[i]);
+		size_t pos = this->_mode.find(mode[i]);
+		if (pos != std::string::npos) {
+			this->_mode.erase(pos, 1);
 		}
 	}
 }
 
 void	Channel::removeMode(char flag) {
-	if (this->_mode.find(flag) != std::string::npos) {
-		this->_mode.erase(flag);
+	size_t pos = this->_mode.find(flag);
+	if (pos != std::string::npos) {
+		this->_mode.erase(pos, 1);
 	}
 }
 

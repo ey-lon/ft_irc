@@ -13,7 +13,7 @@ class User
 
 		pollfd								_pollFd;
 		bool								_isAuthenticated;
-		bool								_isAuthorized;
+		bool								_isVerified;
 		std::string							_message;
 		
 		User(void);
@@ -24,8 +24,7 @@ class User
 
 		//getters
 		bool				isAuthenticated(void) const;
-		bool				isAuthorized(void) const;
-		int					getAuthenticationFase(void) const;
+		bool				isVerified(void) const;
 		pollfd				getPollFd(void) const;
 		int					getFd(void) const;
 		short				getEvents(void) const;
@@ -37,7 +36,7 @@ class User
 
 		//setters
 		void				authenticate(void);
-		void				authorize(void);
+		void				verify(void);
 		void				setUserName(const std::string & userName);
 		void				setNickName(const std::string & nickName);
 		void				setMessage(const std::string & message);

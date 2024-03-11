@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <climits>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
@@ -66,26 +67,19 @@ Server::~Server(void) {
 //==================================================
 //COMMANDS
 
-//--------------------------------------------------
-//authorization
-void	Server::cap(std::vector<std::string> argv, User * user) {
-	//CAP LS/REQ/ACK
-
-	(void)argv;
-	(void)user;
-	//ignore Client Capabilities Negotiation always?
-}
-
 void	Server::pass(std::vector<std::string> argv, User * user) {
 	//PASS <password>
-	if (argv.size() < 2) {
-		return ;
+	if (user->isVerified()) {
+		; //error: user is already verified
+	}
+	else if (argv.size() < 2) {
+		; //error: user didn't provide password
 	}
 	else if (argv[1] != this->_password) {
 		; //error: password doesn't match
 	}
 	else {
-		user->authorize();
+		user->verify();
 		//send message to client?
 	}
 }
@@ -94,30 +88,50 @@ void	Server::pass(std::vector<std::string> argv, User * user) {
 //authentication
 void	Server::user(std::vector<std::string> argv, User * user) {
 	//USER <username>
-	if (argv.size() < 2) {
-		; //error
+	if (!user->isVerified()) {
+		; //error: user isn't verified
+	}
+	if (user->isAuthenticated()) {
+		; //error: user is already authenticated
+	}
+	else if (argv.size() < 2) {
+		; //error: user didn't provide username
+	}
+	else if (!user->getUserName().empty()) {
+		; //error: cannot change username
 	}
 	else if (getUserByUserName(argv[1])) {
 		; //error: user already exists
 	}
 	else {
 		user->setUserName(argv[1]);
+		if (!user->isAuthenticated() && !user->getNickName().empty()) {
+			user->authenticate();
+			this->welcomeMsg(user);
+		}
 	}
 }
 
 void	Server::nick(std::vector<std::string> argv, User * user) {
 	//NICK <nickname>
+	if (!user->isVerified()) {
+		; //error: user isn't verified
+	}
 	if (argv.size() < 2) {
-		; //error
+		; //error: user didn't provide nickname
 	}
 	else if (getUserByNickName(argv[1])) {
 		; //error: user already exists
 	}
 	else {
-		std::string rplNick = ":" + user->getNickName() + "!" + this->getName() + " NICK " + argv[1] + "\r\n";
+		std::string rplNick = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " " + argv[1] + "\r\n";
 		user->setNickName(argv[1]);
-		for (std::map<int, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
-			send(it->second->getFd(), rplNick.c_str(), rplNick.length(), MSG);
+		if (user->isAuthenticated()) {
+			this->serverMegaphone(NULL, rplNick);
+		}
+		if (!user->isAuthenticated() && !user->getUserName().empty()) {
+			user->authenticate();
+			this->welcomeMsg(user);
 		}
 	}
 }
@@ -126,8 +140,11 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 //other
 void	Server::privmsg(std::vector<std::string> argv, User * user) {
 	//PRIVMSG <nickname/channel> <message>
+	if (!user->isAuthenticated()) {
+		return; //error: user isn't authenticated
+	}
 	if (argv.size() < 3) {
-		return ;
+		return ; //error: user didn't provide destination and/or message
 	}
 	std::string	destName = argv[1];
 	std::string msgText = argv[2];
@@ -144,7 +161,7 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 		else {
 			//send message to user
 			User * userDest = this->getUserByNickName(destName);
-			if (userDest && userDest->getNickName() != user->getNickName()) {
+			if (userDest && userDest->isAuthenticated() && userDest != user) {
 				send(userDest->getFd(), msgText.c_str(), msgText.length(), MSG);
 			}
 		}
@@ -153,8 +170,11 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 
 void	Server::join(std::vector<std::string> argv, User * user) {
 	//JOIN <ch1,ch2,...,chn> [<key1,key2,...,keyn>]
+	if (!user->isAuthenticated()) {
+		return; //error: user isn't authenticated
+	}
 	if (argv.size() < 2) {
-		return;
+		return; //error: user didn't provide channel(s)
 	}
 	std::vector<std::string> channelVec = splitString(argv[1], ',');	// <-- split into channel vector
 	std::vector<std::string> keyVec;
@@ -176,7 +196,7 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 			else if (channel->hasFlag('k') && (i >= keyVec.size() || channel->getPassword() != keyVec[i])) {
 				;//error: password needed, user didn't send it or it doesn't match
 			}
-			else if (channel->hasFlag('l') && channel->getUsersLimit() >= channel->nUsers()) {
+			else if (channel->hasFlag('l') && channel->nUsers() >= channel->getUsersLimit()) {
 				;//error: too many users
 			}
 			else { //user can join
@@ -215,8 +235,11 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 
 void	Server::part(std::vector<std::string> argv, User * user) {
 	//PART <channel> [<message>]
+	if (!user->isAuthenticated()) {
+		return; //error: user isn't authenticated
+	}
 	if (argv.size() < 2) {
-		return ; //error: user did't send channel
+		return ; //error: user did't provide channel
 	}
 	std::string channelName = argv[1];
 	if (channelName[0] == '#') {
@@ -224,38 +247,50 @@ void	Server::part(std::vector<std::string> argv, User * user) {
 	}
 	Channel * channel = this->getChannelByName(channelName);
 	if (channel && channel->getUserByNickName(user->getNickName())) {
-		channel->removeUser(user->getNickName());
-		std::string rplMsg;
+		std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName;
 		if (argv.size() > 2) {
-			rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + " :" + argv[2] + "\r\n";
+			rplMsg += " :" + argv[2] + "\r\n";
 		}
-		else {
-			rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + "\r\n";
-		}
+		rplMsg += "\r\n";
 		this->channelMegaphone(channel, NULL, rplMsg);
+		channel->removeUser(user->getNickName());
 	}
 	else {
 		; // error: channel doesn't exist or user is not in channel
 	}
 }
 
-void	Server::ping(std::vector<std::string> argv, User * user) {
-	std::string pong;
+void	Server::quit(std::vector<std::string> argv, User * user) {
+	//QUIT [<message>]
+	std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0];
 	if (argv.size() > 1) {
-		pong = "PONG " + argv[1] + "\r\n";
+		rplMsg += " :" + argv[1];
 	}
-	else {
-		pong = "PONG\r\n";
+	rplMsg += "\r\n";
+	if (user->isAuthenticated()) {
+		this->serverMegaphone(NULL, rplMsg);
 	}
-	send(user->getFd(), pong.c_str(), pong.length(), MSG);
+	this->removeUser(user->getFd());
+}
+
+void	Server::ping(std::vector<std::string> argv, User * user) {
+	std::string rplMsg = "PONG";
+	if (argv.size() > 1) {
+		rplMsg += " " + argv[1];
+	}
+	rplMsg += "\r\n";
+	send(user->getFd(), rplMsg.c_str(), rplMsg.length(), MSG);
 }
 
 //--------------------------------------------------
 //operators only
 void	Server::kick(std::vector<std::string> argv, User * user) {
 	//KICK <#channel> <nickname> [<message>]
+	if (!user->isAuthenticated()) {
+		return; //error: user isn't authenticated
+	}
 	if (argv.size() < 3) {
-		return ;
+		return ; //error: user didn't provide channel and/or nickname
 	}
 	std::string channelName = argv[1];
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
@@ -269,22 +304,23 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 		}
 		else {
 			channel->removeUser(nickName);
-			std::string rplKick = ":" + user->getNickName() + "!" + this->getName() + " KICK #" + channel->getName() + " " + argv[2];
+			std::string rplKick = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + " " + argv[2];
 			if (argv.size() > 3 && !argv[3].empty()) {
 				rplKick += " :" + argv[3]; //append optional message
 			}
 			rplKick += "\r\n";
-			for (std::map<int, User *>::iterator it = this->_users.begin(); it != this->_users.end(); ++it) {
-				send(it->second->getFd(), rplKick.c_str(), rplKick.length(), MSG);
-			}
+			this->serverMegaphone(NULL, rplKick);
 		}
 	}
 }
 
 void	Server::invite(std::vector<std::string> argv, User * user) {
 	//INVITE <nickname> <channel>
+	if (!user->isAuthenticated()) {
+		return ; //error: user isn't authenticated
+	}
 	if (argv.size() < 3) {
-		return ;
+		return ; //error: user didn't provide nickname and/or channel 
 	}
 	std::string channelName = argv[2];
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
@@ -296,14 +332,17 @@ void	Server::invite(std::vector<std::string> argv, User * user) {
 		if (!channel->isUserOperator(user->getNickName())) {
 			; //error: user is not operator
 		}
+		else if (channel->hasFlag('l') && channel->nUsers() >= channel->getUsersLimit()) {
+			; //error: too many users
+		}
 		else {
 			User * userInv = getUserByNickName(nickName);
-			if (userInv) {
+			if (userInv && userInv->isAuthenticated()) {
 				channel->addUser(userInv);
 				this->joinMsg(channel, userInv);
 			}
 			else {
-				; //error: user to invite not found
+				; //error: user_to_invite not found or isn't authenticated
 			}			
 		}
 	}
@@ -314,8 +353,11 @@ void	Server::invite(std::vector<std::string> argv, User * user) {
 
 void	Server::topic(std::vector<std::string> argv, User * user) {
 	//TOPIC <channel> [<topic>]
+	if (!user->isAuthenticated()) {
+		return; //error: user isn't authenticated
+	}
 	if (argv.size() < 2) {
-		return ;
+		return ; //error: user didn't provide channel
 	}
 	std::string channelName = argv[1];
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
@@ -324,7 +366,7 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 	Channel * channel = this->getChannelByName(channelName);
 	if (channel) {
 		if (channel->hasFlag('t') && !channel->isUserOperator(user->getNickName())) {
-			; //error: user is not operator
+			; //error: restrictions are set but user is not operator
 		}
 		else if (argv.size() > 2) {
 			channel->setTopic(argv[2]);
@@ -350,6 +392,9 @@ void	Server::topic(std::vector<std::string> argv, User * user) {
 
 void	Server::mode(std::vector<std::string> argv, User * user) {
 	//MODE <channel> {[+|-]|i|t|k|o|l} [<user>] [<limit>] [<password>]
+	if (!user->isAuthenticated()) {
+		return; //error: user isn't authenticated
+	}
 	if (argv.size() < 3) { //user didn't send channel or flags
 		return ;
 	}
@@ -459,14 +504,25 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 
 //==================================================
 
-void	Server::channelMegaphone(Channel * channel, User * user, const std::string & msg) {
+void	Server::channelMegaphone(Channel * channel, User * user, const std::string & msg) const {
+	//send a message to all users in channel
 	if (!channel) {
 		return;
 	}
 	// user is to be ignored if not NULL
 	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
-		if (!user || user->getNickName() != it->first->getNickName()) {
+		if (!user || user != it->first) {
 			send(it->first->getFd(), msg.c_str(), msg.length(), MSG);
+		}
+	}
+}
+
+void	Server::serverMegaphone(User * user, const std::string & msg) const {
+	//send a message to all users in server
+	// user is to be ignored if not NULL
+	for (std::map<int, User *>::const_iterator it = this->_users.begin(); it != _users.end(); ++it) {
+		if (!user || user != it->second) {
+			send(it->second->getFd(), msg.c_str(), msg.length(), MSG);
 		}
 	}
 }
@@ -496,11 +552,15 @@ void Server::joinMsg(Channel *channel, User *user) {
 	send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
 
     std::string rplMode = ":" + this->getName() + " 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
-	if (channel->hasFlag('l')) {
-		rplMode += " " + channel->getUsersLimit();
-	}
-	if (channel->hasFlag('k') && channel->getPassword().length() > 0) {
-		rplMode += " " + channel->getPassword();
+	for (size_t i = 0; i < channel->getMode().length(); ++i) {
+		if (channel->getMode()[i] == 'l') {
+			std::stringstream ss;
+			ss << channel->getUsersLimit();
+			rplMode += " " + ss.str();
+		}
+		if (channel->getMode()[i] == 'k' && channel->getPassword().length() > 0) {
+			rplMode += " " + channel->getPassword();
+		}
 	}
 	rplMode += "\r\n";
     send(user->getFd(), rplMode.c_str(), rplMode.length(), MSG);
@@ -534,42 +594,21 @@ void	Server::welcomeMsg(User * user) {
 	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
 }
 
-void	Server::authorization(std::vector<std::string> argv, User *user) {
-	//here I can expect either CAP LS 302 or PASS command
-	if (argv.empty()) {
-		return;
-	}
-	else if (argv[0] == "CAP") {
-		;
-	}
-	else if (argv[0] == "PASS") {
-		this->pass(argv, user);
-	}
-}
-
-void	Server::login(std::vector<std::string> argv, User *user) {
-	if (argv.empty()) {
-		return;
-	}
-	else if (argv[0] == "NICK") {
-		this->nick(argv, user);
-	}
-	else if (argv[0] == "USER") {
-		this->user(argv, user);
-	}
-	if (!user->getNickName().empty() && !user->getUserName().empty()) {
-		user->authenticate();
-		this->welcomeMsg(user);
-	}
-}
-
 void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 	if (argv.empty()) {
 		return;
 	}
-	//commands
-	else if (argv[0] == "CAP") {
-		;
+	else if (argv[0] == "PING") {
+		this->ping(argv, user);
+	}
+	else if (argv[0] == "QUIT") {
+		this->quit(argv, user);
+	}
+	else if (argv[0] == "PASS") {
+		this->pass(argv, user);
+	}
+	else if (argv[0] == "USER") {
+		this->user(argv, user);
 	}
 	else if (argv[0] == "NICK") {
 		this->nick(argv, user);
@@ -577,12 +616,11 @@ void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 	else if (argv[0] == "JOIN") {
 		this->join(argv, user);
 	}
+	else if (argv[0] == "PART") {
+		this->part(argv, user);
+	}
 	else if (argv[0] == "PRIVMSG") {
 		this->privmsg(argv, user);
-	}
-	//operators only
-	else if (argv[0] == "KICK") {
-		this->kick(argv, user);
 	}
 	else if (argv[0] == "INVITE") {
 		this->invite(argv, user);
@@ -590,61 +628,38 @@ void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 	else if (argv[0] == "TOPIC") {
 		this->topic(argv, user);
 	}
+	else if (argv[0] == "KICK") {
+		this->kick(argv, user);
+	}
 	else if (argv[0] == "MODE") {
 		this->mode(argv, user);
-	}
-	else if (argv[0] == "PING") {
-		this->ping(argv, user);
-	}
-	else {
-		//unknown command <-- send to client?
-		;
 	}
 }
 
 int Server::dealMessage(int userFd) {
 	User * ptr = this->getUserByFd(userFd);
 	if (!ptr) {	// <-- don't know how it could happen, but you never know.
-		return (2);
+		return (-1);
 	}
-
     char	buffer[1024];
     ssize_t bytesRead = recv(userFd, buffer, sizeof(buffer) - 1, 0);
     if (bytesRead <= 0) {
-        std::cout << "Connection with user_fd [" << ptr->getFd() << "] terminated." << std::endl;
-        close(userFd);
 		this->removeUser(userFd);
 		return (1);
     }
-    else {
-		buffer[bytesRead] = '\0'; // <--- NECESSARY
-		ptr->setMessage(ptr->getMessage() + buffer);
-		if (ptr->getMessage().find('\n') != std::string::npos) {
-			std::vector<std::string> argv = parseInput(ptr->getMessage());
-			if (!ptr->isAuthorized()) {
-				this->authorization(argv, ptr);
-			}
-			else if (!ptr->isAuthenticated()) {
-				this->login(argv, ptr);
-			}
-			else {
-				this->dealCommand(argv, ptr);
-			}
-			std::cout << "[" << ptr->getFd() << "]: " << ptr->getMessage() << std::endl;
-			ptr->setMessage("");
-		}
+	buffer[bytesRead] = '\0'; // <--- NECESSARY
+	ptr->setMessage(ptr->getMessage() + buffer);
+	if (ptr->getMessage().find('\n') == std::string::npos) {
 		return (0);
-    }
-}
-
-void	Server::newConnection(void) {
-	int userSocket = accept(_serverSocket, NULL, NULL);
-	if (userSocket == -1) {
-		std::cerr << "Connection error" << std::endl;
-		return ;
 	}
-	std::cout << "New connection accepted, user_fd [" << userSocket << "]" << std::endl;
-	this->createUser(userSocket);
+	std::cout << "[" << ptr->getFd() << "]: " << ptr->getMessage() << std::endl;
+	std::vector<std::string> argv = parseInput(ptr->getMessage());
+	this->dealCommand(argv, ptr);
+	if (!argv.empty() && argv[0] == "QUIT") {
+		return (1);
+	}
+	ptr->setMessage("");
+	return (0);
 }
 
 void	Server::loop(void) {
@@ -662,7 +677,7 @@ void	Server::loop(void) {
 		for (size_t i = 0; i < this->_fds.size(); ++i) {
             if (this->_fds[i].revents & POLLIN) {
                 if (this->_fds[i].fd == this->_serverSocket) {
-                    this->newConnection();
+                    this->createUser();
                 }
                 else if (this->dealMessage(this->_fds[i].fd) == 1) {
 					--i; // <-- if client disconnects, its pollfd gets removed from the vector, so the next pollfd is at the index of the one that got removed, right? 
@@ -689,23 +704,19 @@ void	Server::start(void) {
     _serverAddress.sin_port = htons(this->_port);
 	// Bind the socket
     if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
-        close(_serverSocket);
         throw ("socket binding");
     }
     // Listen for incoming connections
     if (listen(_serverSocket, SOMAXCONN) == -1) {
-        close(_serverSocket);
         throw ("socket listening");
     }
 	// Get hostname
 	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
-		close(_serverSocket);
 		throw ("gethostname");
 	}
 	// Get ip
 	struct hostent *host_entry = gethostbyname(_hostname);
 	if (host_entry == NULL) {
-		close(_serverSocket);
 		throw ("gethostbyname");
 	}
 	_ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
@@ -808,11 +819,17 @@ User *	Server::getUserByNickName(const std::string & nickName) const {
 	}
 }
 
-User *	Server::createUser(int fd) {
-	if (this->_users.find(fd) == this->_users.end()) {
-		User * newUser = new User(fd);
-		this->_users.insert(std::make_pair(fd, newUser));					// <-- add user to map
-		this->_fds.push_back(newUser->getPollFd());							// <-- add user pollfd to vector
+User *	Server::createUser() {
+	int userFd = accept(this->_serverSocket, NULL, NULL);
+	if (userFd == -1) {
+		std::cerr << "Connection error" << std::endl;
+		return (NULL);
+	}
+	std::cout << "New connection accepted, user_fd [" << userFd << "]" << std::endl;
+	if (this->_users.find(userFd) == this->_users.end()) {
+		User * newUser = new User(userFd);
+		this->_users.insert(std::make_pair(userFd, newUser));		// <-- add user to map
+		this->_fds.push_back(newUser->getPollFd());					// <-- add user pollfd to vector
 		return (newUser);
 	}
 	else {
@@ -824,114 +841,22 @@ void	Server::removeUser(int userFd) {
 	if (this->_users.find(userFd) != this->_users.end()) {
 
  		//remove user from channels
-		std::string userName = this->getUserByFd(userFd)->getUserName();
+		std::string nickName = this->getUserByFd(userFd)->getNickName();
 		for (std::map<std::string, Channel *>::iterator it = _channels.begin(); it != _channels.end(); it++) {
-			it->second->removeUser(userName);
+			it->second->removeUser(nickName);
 		}
 
-		delete (this->_users[userFd]);										// <-- delete User *
-		this->_users.erase(userFd);											// <-- remove user from map
+		delete (this->_users[userFd]);								// <-- delete User *
+		this->_users.erase(userFd);									// <-- remove user from map
 
 		std::vector<pollfd>::iterator it = this->_fds.begin();
 		while (it != this->_fds.end() && it->fd != userFd) {
 			++it;
 		}
 		if (it != this->_fds.end()) {
-			this->_fds.erase(it);											// <-- remove user pollfd from vector
+			this->_fds.erase(it);									// <-- remove user pollfd from vector
 		}
+
+		std::cout << "Connection with user_fd [" << userFd << "] terminated." << std::endl;
 	}
 }
-
-
-/* if (flags[0] == '+') {
-			for (size_t i = 1; i < flags.length(); i++) {
-				if (flags[i] == 'o') {
-					if (argv.size() > argIndex) {
-						User * user = channel->getUserByNickName(argv[argIndex]);
-						if (user && !channel->isUserOperator(user->getNickName())) {
-							channel->promoteUser(user->getNickName());
-							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " +" + flags[i] + " " + argv[argIndex] + "\r\n"; 
-							channelMegaphone(channel, NULL, rplMsg);
-						}
-						else {
-							; //error: user not in channel
-						}
-						argIndex++;
-					}
-					else {
-						; //error: missing nickname
-					}
-				}
-				else if (flags[i] == 'l') {
-					if (argv.size() > argIndex) {
-						if (std::atoi(argv[argIndex].c_str()) > 0) {
-							channel->setUsersLimit(std::atoi(argv[argIndex].c_str()));
-							channel->addMode('l');
-							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " +" + flags[i] + " " + argv[argIndex] + "\r\n"; 
-							channelMegaphone(channel, NULL, rplMsg);
-						}
-						else {
-							; //error: invalid users_limit
-						}
-						argIndex++;
-					}
-					else {
-						; //error: missing users_limit
-					}
-				}
-				else if (flags[i] == 'k') {
-					if (argv.size() > argIndex) {
-						if (isValidPassword(argv[argIndex])) {
-							channel->setPassword(argv[argIndex]);
-							channel->addMode('k');
-							std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " +" + flags[i] + " " + argv[argIndex] + "\r\n"; 
-							channelMegaphone(channel, NULL, rplMsg);
-						}
-						else {
-							; //error: invalid password
-						}
-						argIndex++;
-					}
-					else {
-						; //error: missing password
-					}
-				}
-				else if (flags[i] == 'i' || flags[i] == 't') {
-					channel->addMode(flags[i]);
-					//communicate with channel users <--
-				}
-				else {
-					; //error: unknown flag
-				}
-			}
-		}
-		else if (flags[0] == '-') {
-			for (size_t i = 1; i < flags.length(); i++) {
-				if (flags[i] == 'o') {
-					if (argv.size() > argIndex) {
-						User * user = channel->getUserByNickName(argv[argIndex]);
-						if (user) {
-							channel->demoteUser(user->getNickName());
-						}
-						else {
-							; //error: user not in channel
-						}
-						argIndex++;
-					}
-					else {
-						; //error: missing nickname
-					}
-				}
-				else if (flags[i] == 'l' || flags[i] == 'k' || flags[i] == 'i' || flags[i] == 't') {
-					channel->removeMode(flags[i]);
-					std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channel->getName() + " -" + flags[i] + "\r\n";
-					channelMegaphone(channel, NULL, rplMsg);
-				}
-				else {
-					; //error: unknown flag
-				}
-			}
-		}
-		else {
-			; //error: flags don't start with +/-
-		} */

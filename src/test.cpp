@@ -6,7 +6,7 @@
 /*   By: abettini <abettini@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/12/05 09:48:38 by abettini          #+#    #+#             */
-/*   Updated: 2024/02/26 14:27:50 by abettini         ###   ########.fr       */
+/*   Updated: 2024/03/08 14:34:14 by abettini         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -46,14 +46,12 @@ int main()
     // Bind the socket
     if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
         std::cerr << "Error binding socket" << std::endl;
-        close(serverSocket);
         return (1);
     }
 
     // Listen for incoming connections
     if (listen(serverSocket, 10) == -1) {
         std::cerr << "Error listening on socket" << std::endl;
-        close(serverSocket);
         return (1);
     }
 
@@ -107,11 +105,6 @@ int main()
                         if (msg.find('\n') != std::string::npos)
                         {
                             std::cout << msg << std::endl;
-                            if (msg == "exit\n")
-                            {
-                                close(serverSocket);
-                                return (0);
-                            }
                             msg.clear();
                         }
                     }
@@ -119,6 +112,5 @@ int main()
             }
         }
     }
-    close(serverSocket);
     return 0;
 }

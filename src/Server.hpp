@@ -27,17 +27,15 @@ class Server
 		std::vector<pollfd>					_fds;
 
 		//communication
-		void				channelMegaphone(Channel * channel, User * user, const std::string & msg);
+		void				channelMegaphone(Channel * channel, User * user, const std::string & msg) const;
+		void				serverMegaphone	(User * user, const std::string & msg) const;
 		void				joinMsg			(Channel * channel, User * user);
 		void				welcomeMsg		(User * user);
-		void				authorization	(std::vector<std::string> argv, User * user);
-		void				login			(std::vector<std::string> argv, User * user);
 		void				dealCommand		(std::vector<std::string> argv, User * user);
 		int					dealMessage		(int userFd);
 		void				newConnection	(void);
 
 		//commands
-		void				cap				(std::vector<std::string> argv, User * user);
 		void				pass			(std::vector<std::string> argv, User * user);
 		void				user			(std::vector<std::string> argv, User * user);
 		void				nick			(std::vector<std::string> argv, User * user);
@@ -47,8 +45,9 @@ class Server
 		void				kick			(std::vector<std::string> argv, User * user);
 		void				topic			(std::vector<std::string> argv, User * user);
 		void				mode			(std::vector<std::string> argv, User * user);
-		void				ping			(std::vector<std::string> argv, User * user);
 		void				part			(std::vector<std::string> argv, User * user);
+		void				quit			(std::vector<std::string> argv, User * user);
+		void				ping			(std::vector<std::string> argv, User * user);
 
 	public:
 		Server(int port, const std::string & password);					//constructor where port is given as an int
@@ -77,6 +76,6 @@ class Server
 		User *				getUserByFd(int userFd) const;
 		User *				getUserByUserName(const std::string & userName) const;
 		User *				getUserByNickName(const std::string & nickName) const;
-		User *				createUser(int fd);
+		User *				createUser();
 		void				removeUser(int userFd);
 };
