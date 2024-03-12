@@ -296,9 +296,9 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
 		channelName.erase(0, 1); // remove #
 	}
-	std::string nickName = argv[2];
 	Channel * channel = getChannelByName(channelName);
 	if (channel) {
+		std::string nickName = argv[2];
 		if (!channel->isUserOperator(user->getNickName())) {
 			; //error: user is not operator
 		}
@@ -326,7 +326,6 @@ void	Server::invite(std::vector<std::string> argv, User * user) {
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
 		channelName.erase(0, 1); // remove #
 	}
-	std::string nickName = argv[1];
 	Channel * channel = this->getChannelByName(channelName);
 	if (channel) {
 		if (!channel->isUserOperator(user->getNickName())) {
@@ -336,6 +335,7 @@ void	Server::invite(std::vector<std::string> argv, User * user) {
 			; //error: too many users
 		}
 		else {
+			std::string nickName = argv[1];
 			User * userInv = getUserByNickName(nickName);
 			if (userInv && userInv->isAuthenticated()) {
 				channel->addUser(userInv);
@@ -662,17 +662,17 @@ int Server::dealMessage(int userFd) {
 	return (0);
 }
 
-void	Server::loop(void) {
+void	Server::run(void) {
 	std::cout << "Server with ip: " << _ip << ", listening on port: " << _port << std::endl;
 
 	pollfd	serverPollFd;
 	serverPollFd.fd = this->_serverSocket;
 	serverPollFd.events = POLLIN;
 	serverPollFd.revents = 0;
-
     this->_fds.push_back(serverPollFd);
 
-    while (true) {
+	this->_isRunning = true;
+    while (this->isRunning() == true) {
 		poll(this->_fds.data(), this->_fds.size(), -1);
 		for (size_t i = 0; i < this->_fds.size(); ++i) {
             if (this->_fds[i].revents & POLLIN) {
@@ -687,7 +687,7 @@ void	Server::loop(void) {
     }
 }
 
-void	Server::start(void) {
+void	Server::init(void) {
 	// Create a socket
 	_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (_serverSocket == -1) {
@@ -744,12 +744,20 @@ int	Server::nChannels(void) const {
 	return (this->_channels.size());
 }
 
+bool	Server::isRunning(void) const {
+	return (this->_isRunning);
+}
+
 //--------------------------------------------------
 //setters
 void	Server::setPassword(const std::string &password) {
 	if (isValidPassword(password)) {
 		this->_password = password;
 	}
+}
+
+void	Server::stop(void) {
+	this->_isRunning = false;
 }
 
 //--------------------------------------------------

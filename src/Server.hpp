@@ -21,6 +21,7 @@ class Server
 		char *								_ip;
 		u_int16_t							_port;
 		std::string							_password;
+		bool								_isRunning;
 
 		std::map<std::string, Channel *>	_channels;
 		std::map<int, User *>				_users;
@@ -54,8 +55,9 @@ class Server
 		Server(const std::string & port, const std::string & password); //constructor where port is given as a literal int
 		~Server(void);
 
-		void				start(void);
-		void				loop(void);
+		void				init(void);
+		void				run(void);
+		void				stop(void);
 
 		//getters
 		const std::string &	getName(void) const;
@@ -63,6 +65,7 @@ class Server
 		int					getPort(void) const;
 		int					nUsers(void) const;
 		int					nChannels(void) const;
+		bool				isRunning(void) const;
 
 		//setters
 		void				setPassword(const std::string & password);
