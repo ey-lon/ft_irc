@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include <netdb.h>
+#include <fcntl.h>
 #include <cstdio>
 #include <cstdlib>
 #include <climits>
@@ -303,13 +304,13 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 			; //error: user is not operator
 		}
 		else {
-			channel->removeUser(nickName);
 			std::string rplKick = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + " " + argv[2];
 			if (argv.size() > 3 && !argv[3].empty()) {
 				rplKick += " :" + argv[3]; //append optional message
 			}
 			rplKick += "\r\n";
-			this->serverMegaphone(NULL, rplKick);
+			this->channelMegaphone(channel, NULL, rplKick);
+			channel->removeUser(nickName);
 		}
 	}
 }
@@ -577,11 +578,11 @@ void Server::joinMsg(Channel *channel, User *user) {
 void	Server::welcomeMsg(User * user) {
 	std::string nickname = user->getNickName();
 	std::string RPL_WELCOME =	":" + this->getName() + " 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
-	std::string RPL_YOURHOST =	":" + this->getName() + " 002 " + nickname + " :Your host is " + this->_hostname + " , running version 42 \r\n";
+	std::string RPL_YOURHOST =	":" + this->getName() + " 002 " + nickname + " :Your host is " + this->_hostname + ", running version 42 \r\n";
 	std::string RPL_CREATED = 	":" + this->getName() + " 003 " + nickname + " :This server was created 30/10/2023\r\n";
-	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircsev 42 +o +l+i+k+t\r\n";
+	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircserv 42 +o +l+i+k+t\r\n";
 	std::string RPL_ISUPPORT =	":" + this->getName() + " 005 " + nickname + " operator ban limit invite key topic :are supported by this server\r\n";
-	std::string RPL_MOTD =		":" + this->getName() + " 372 " + nickname + " : Welcome to " + this->getName() + "\r\n";
+	std::string RPL_MOTD =		":" + this->getName() + " 372 " + nickname + " :Welcome to " + this->getName() + "\r\n";
 	std::string RPL_ENDOFMOTD =	":" + this->getName() + " 376 " + nickname + " :End of MOTD command\r\n";
 
 	int fd = user->getFd();
@@ -648,6 +649,7 @@ int Server::dealMessage(int userFd) {
 		return (1);
     }
 	buffer[bytesRead] = '\0'; // <--- NECESSARY
+	//std::cout << "bytes received = " << bytesRead << ", " << buffer << std::endl; 
 	ptr->setMessage(ptr->getMessage() + buffer);
 	if (ptr->getMessage().find('\n') == std::string::npos) {
 		return (0);
@@ -663,63 +665,71 @@ int Server::dealMessage(int userFd) {
 }
 
 void	Server::run(void) {
-	std::cout << "Server with ip: " << _ip << ", listening on port: " << _port << std::endl;
+	std::cout << "Server running at " << _ip << ":" << _port << std::endl;
 
 	pollfd	serverPollFd;
 	serverPollFd.fd = this->_serverSocket;
 	serverPollFd.events = POLLIN;
 	serverPollFd.revents = 0;
-    this->_fds.push_back(serverPollFd);
+	this->_fds.push_back(serverPollFd);
 
 	this->_isRunning = true;
-    while (this->isRunning() == true) {
+	while (this->isRunning() == true) {
 		poll(this->_fds.data(), this->_fds.size(), -1);
 		for (size_t i = 0; i < this->_fds.size(); ++i) {
-            if (this->_fds[i].revents & POLLIN) {
-                if (this->_fds[i].fd == this->_serverSocket) {
-                    this->createUser();
-                }
-                else if (this->dealMessage(this->_fds[i].fd) == 1) {
-					--i; // <-- if client disconnects, its pollfd gets removed from the vector, so the next pollfd is at the index of the one that got removed, right? 
+			if (this->_fds[i].revents & POLLIN) {
+				if (this->_fds[i].fd == this->_serverSocket) {
+					this->createUser();
 				}
-            }
-        }
-    }
+				else if (this->dealMessage(this->_fds[i].fd) == 1) {
+					--i; // <-- if client disconnects, its pollfd is removed from the vector, so the next pollfd is at the index of the one that got removed. 
+				}
+			}
+		}
+	}
 }
 
 void	Server::init(void) {
 	// Create a socket
 	_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (_serverSocket == -1) {
-		throw ("socket creation");
+		throw ("socket creation failure");
     }
 	// Set socket options
     int opt = 1;
-    if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        throw ("socket option settings");
+    if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+        throw ("socket option settings failure");
     }
-    // Set up server address structure
-	_serverAddress.sin_family = AF_INET;
-    _serverAddress.sin_addr.s_addr = INADDR_ANY;	// Listen on all available interfaces
-    _serverAddress.sin_port = htons(this->_port);
-	// Bind the socket
-    if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
-        throw ("socket binding");
-    }
-    // Listen for incoming connections
-    if (listen(_serverSocket, SOMAXCONN) == -1) {
-        throw ("socket listening");
-    }
+	int recicle = -1;
+	if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR, &recicle, sizeof(recicle)) == -1) {
+		throw ("socket reusable settings failure");
+	}
 	// Get hostname
 	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
-		throw ("gethostname");
+		throw ("gethostname failure");
 	}
 	// Get ip
 	struct hostent *host_entry = gethostbyname(_hostname);
 	if (host_entry == NULL) {
-		throw ("gethostbyname");
+		throw ("gethostbyname failure");
 	}
 	_ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
+    // Set up server address structure
+	_serverAddress.sin_family = AF_INET;
+    _serverAddress.sin_addr.s_addr = INADDR_ANY;	// Listen on all available interfaces
+    _serverAddress.sin_port = htons(this->_port);
+	// Controls on fd
+	if (fcntl(_serverSocket, F_SETFL, O_NONBLOCK) < 0) {
+		throw ("non-blocking socket setting failure");
+	}
+	// Bind the socket
+    if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
+        throw ("socket binding failure");
+    }
+    // Listen for incoming connections
+    if (listen(_serverSocket, SOMAXCONN) == -1) {
+        throw ("socket listening failure");
+    }
 }
 
 //--------------------------------------------------

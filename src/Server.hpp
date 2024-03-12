@@ -56,29 +56,29 @@ class Server
 		~Server(void);
 
 		void				init(void);
-		void				run(void);
+		void				run (void);
 		void				stop(void);
 
 		//getters
-		const std::string &	getName(void) const;
-		const std::string &	getPassword(void) const;
-		int					getPort(void) const;
-		int					nUsers(void) const;
-		int					nChannels(void) const;
-		bool				isRunning(void) const;
+		const std::string &	getName		(void) const;
+		const std::string &	getPassword	(void) const;
+		int					getPort		(void) const;
+		int					nUsers		(void) const;
+		int					nChannels	(void) const;
+		bool				isRunning	(void) const;
 
 		//setters
-		void				setPassword(const std::string & password);
+		void				setPassword	(const std::string & password);
 
 		//channels
-		Channel *			getChannelByName(const std::string & channelName) const;
-		Channel *			createChannel(const std::string & channelName);
-		void				removeChannel(const std::string & channelName);
+		Channel *			getChannelByName	(const std::string & channelName) const;
+		Channel *			createChannel		(const std::string & channelName);
+		void				removeChannel		(const std::string & channelName);
 
 		//users
-		User *				getUserByFd(int userFd) const;
-		User *				getUserByUserName(const std::string & userName) const;
-		User *				getUserByNickName(const std::string & nickName) const;
-		User *				createUser();
-		void				removeUser(int userFd);
+		User *				getUserByFd			(int userFd) const;
+		User *				getUserByUserName	(const std::string & userName) const;
+		User *				getUserByNickName	(const std::string & nickName) const;
+		User *				createUser			(void);
+		void				removeUser			(int userFd);
 };

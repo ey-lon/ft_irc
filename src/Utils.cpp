@@ -1,4 +1,5 @@
 #include "Utils.hpp"
+#include <sstream>
 #include <cstdlib>
 #include <climits>
 
@@ -20,7 +21,6 @@ std::string strTrim(const std::string & s) {
 	return (str);
 }
 
-#include <sstream>
 std::vector<std::string>	splitString(const std::string & input) {
     std::vector<std::string> result;
     std::istringstream iss(input);
@@ -43,6 +43,14 @@ std::vector<std::string>	splitString(const std::string & input, char delimiter) 
 	return (result);
 }
 
+std::string	upperStr(const std::string & input) {
+	std::string result = input;
+	for (size_t i = 0; i < result.length(); ++i) {
+		result[i] = std::toupper(result[i]);
+	}
+	return (result);
+}
+
 std::vector<std::string>	parseInput(const std::string & input) {
 	std::string	str = input;
 	size_t colonPos = str.find(':');
@@ -53,6 +61,9 @@ std::vector<std::string>	parseInput(const std::string & input) {
 		str = str.substr(0, colonPos);
 	}
 	std::vector<std::string> vec = splitString(str);
+	if (!vec.empty()) {
+		vec[0] = upperStr(vec[0]);
+	}
 	if (!spacedString.empty()) {
 		vec.push_back(spacedString);
 	}
