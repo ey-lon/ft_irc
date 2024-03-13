@@ -291,12 +291,12 @@ void	Server::part(std::vector<std::string> argv, User * user) {
 
 void	Server::quit(std::vector<std::string> argv, User * user) {
 	//QUIT [<message>]
-	std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0];
-	if (argv.size() > 1) {
-		rplMsg += " :" + argv[1];
-	}
-	rplMsg += "\r\n";
 	if (user->isAuthenticated()) {
+		std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0];
+		if (argv.size() > 1) {
+			rplMsg += " :" + argv[1];
+		}
+		rplMsg += "\r\n";
 		this->serverMegaphone(NULL, rplMsg);
 	}
 	this->removeUser(user->getFd());
