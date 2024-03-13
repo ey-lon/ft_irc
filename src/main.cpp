@@ -7,14 +7,6 @@
 
 Server * globalServerPtr = NULL;
 
-/* static void	sigHandler(int signal) {
-	if (signal == SIGINT) {						// <-- signal is SIGINT (CTRL + C)
-		if (globalServerPtr != NULL) {			// <-- server has been set
-			globalServerPtr->stop();			// <-- interrupt server loop
-		}
-	}
-} */
-
 static void	sigHandler(int signal, siginfo_t *info, void *ucontext) {
 	if (info->si_pid == 0) {					// <-- sender is server
 		if (signal == SIGINT) {					// <-- signal is SIGINT (CTRL + C)
@@ -41,7 +33,6 @@ int main(int ac, char **av)
 	sa.sa_flags = SA_SIGINFO | SA_NODEFER;
 	sa.sa_sigaction = sigHandler;
 	sigaction(SIGINT, &sa, NULL);
-	//signal(SIGINT, sigHandler);
 	//=== server creation and loop ============
 	try {
 		Server server(av[1], av[2]);

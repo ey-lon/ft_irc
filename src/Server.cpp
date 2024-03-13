@@ -168,7 +168,7 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 		if (!channelDest) {
 			this->errorMsg(user, 403); //error: channel doesn't exist
 		}
-		else if (!channelDest->getUserByNickName(user->getNickName())) {
+		else if (channelDest->hasFlag('n') && !channelDest->getUserByNickName(user->getNickName())) {
 			this->errorMsg(user, 442); //error: user not in channel
 		}
 		else {
@@ -436,7 +436,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 		this->errorMsg(user, 451); //error: user isn't authenticated
 		return;
 	}
-	if (argv.size() < 3) {
+	if (argv.size() < 2) {
 		this->errorMsg(user, 461); //error: user didn't send channel or flags
 		return ;
 	}
@@ -451,6 +451,19 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 	else if (!channel->isUserOperator(user->getNickName())) {
 		this->errorMsg(user, 482); //error: user is not operator
 	}
+	else if (argv.size() < 3) { // <-- view mode
+		std::string rplMode = ":" + this->getName() + " 324 " + user->getNickName() + " #" + channelName + " +" + channel->getMode();
+		for (size_t i = 0; i < channel->getMode().length(); ++i) {
+			if (channel->getMode()[i] == 'l') {
+				rplMode += " " + toString(channel->getUsersLimit());
+			}
+			else if (channel->getMode()[i] == 'k' && channel->getPassword().length() > 0) {
+				rplMode += " " + channel->getPassword();
+			}
+		}
+		rplMode += "\r\n";
+		send(user->getFd(), rplMode.c_str(), rplMode.length(), MSG);
+	}
 	else if (argv[2][0] != '+' && argv[2][0] != '-') {
 		this->errorMsg(user, 472); //error: flags dont start with +/-
 	}
@@ -461,7 +474,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 			if (flags[i] == 'o') {
 				if (argv.size() > argIndex) {
 					if (channel->getUserByNickName(argv[argIndex])) {
-						if (flags[0] == '+') {
+						if (flags[0] != '-') {
 							channel->promoteUser(argv[argIndex]);
 						}
 						else {
@@ -480,7 +493,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 				}
 			}
 			else if (flags[i] == 'l') {
-				if (flags[0] == '+') {
+				if (flags[0] != '-') {
 					if (argv.size() > argIndex) {
 						if (std::atoi(argv[argIndex].c_str()) > 0) {
 							channel->setUsersLimit(std::atoi(argv[argIndex].c_str()));
@@ -504,7 +517,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 				}
 			}
 			else if (flags[i] == 'k') {
-				if (flags[0] == '+') {
+				if (flags[0] != '-') {
 					if (argv.size() > argIndex) {
 						if (isValidPassword(argv[argIndex])) {
 							channel->setPassword(argv[argIndex]);
@@ -527,8 +540,8 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 					this->channelMegaphone(channel, NULL, rplMsg);
 				}
 			}
-			else if (flags[i] == 'i' || flags[i] == 't') {
-				if (flags[0] == '+') {
+			else if (flags[i] == 'i' || flags[i] == 't' || flags[i] == 'n') {
+				if (flags[0] != '-') {
 					channel->addMode(flags[i]);
 				}
 				else {
@@ -537,8 +550,11 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 				std::string rplMsg = ":" + this->getName() + " " + argv[0] + " #" + channel->getName() + " " + flags[0] + flags[i] + "\r\n"; 
 				this->channelMegaphone(channel, NULL, rplMsg);
 			}
+			else if (flags[i] == 'b') {
+				; //ignore flag b
+			}
 			else {
-				this->errorMsg(user, 401); //error: unknown flag
+				this->errorMsg(user, 472); //error: unknown flag
 			}
 		}
 	}
@@ -572,18 +588,16 @@ void	Server::serverMegaphone(User * user, const std::string & msg) const {
 void Server::joinMsg(Channel *channel, User *user) {
 	std::string rplJoin = ":" + user->getNickName() + "!" + this->getName() + " JOIN #" + channel->getName() + "\r\n";
     std::string	rplUserList = ":" + this->getName() + " 353 " + user->getNickName() + " = #" + channel->getName() + " :";
-
+	//user_list
 	for (std::map<User *, bool>::const_iterator it = channel->getUsers().begin(); it != channel->getUsers().end(); ++it) {
 		send(it->first->getFd(), rplJoin.c_str(), rplJoin.length(), MSG);
 		rplUserList += it->first->getNickName();
 		if(it != --channel->getUsers().end()) {
 			rplUserList += " ";
 		}
-		else {
-			rplUserList += "\r\n";
-		}
 	}
-
+	rplUserList += "\r\n";
+	//topic
 	std::string rplTopic;
 	if (channel->getTopic().empty()) {
 		rplTopic = ":" + this->getName() + " 331 " + user->getNickName() + " #" + channel->getName() + " :No topic is set" + "\r\n";
@@ -591,18 +605,19 @@ void Server::joinMsg(Channel *channel, User *user) {
 	else {
 		rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
 	}
-	send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
-
+	//mode
     std::string rplMode = ":" + this->getName() + " 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
 	for (size_t i = 0; i < channel->getMode().length(); ++i) {
 		if (channel->getMode()[i] == 'l') {
 			rplMode += " " + toString(channel->getUsersLimit());
 		}
-		if (channel->getMode()[i] == 'k' && channel->getPassword().length() > 0) {
+		else if (channel->getMode()[i] == 'k' && channel->getPassword().length() > 0) {
 			rplMode += " " + channel->getPassword();
 		}
 	}
 	rplMode += "\r\n";
+
+	send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
     send(user->getFd(), rplMode.c_str(), rplMode.length(), MSG);
 	send(user->getFd(), rplUserList.c_str(), rplUserList.length(), MSG);
 	
@@ -619,7 +634,7 @@ void	Server::welcomeMsg(User * user) {
 	std::string RPL_WELCOME =	":" + this->getName() + " 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
 	std::string RPL_YOURHOST =	":" + this->getName() + " 002 " + nickname + " :Your host is " + this->_hostname + ", running version 42 \r\n";
 	std::string RPL_CREATED = 	":" + this->getName() + " 003 " + nickname + " :This server was created 30/10/2023\r\n";
-	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircserv 42 +o +l+i+k+t\r\n";
+	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircserv 42 +o +l+i+k+t+n\r\n";
 	std::string RPL_ISUPPORT =	":" + this->getName() + " 005 " + nickname + " operator ban limit invite key topic :are supported by this server\r\n";
 	std::string RPL_MOTD =		":" + this->getName() + " 372 " + nickname + " :Welcome to " + this->getName() + "\r\n";
 	std::string RPL_ENDOFMOTD =	":" + this->getName() + " 376 " + nickname + " :End of MOTD command\r\n";
@@ -637,10 +652,12 @@ void	Server::welcomeMsg(User * user) {
 void	Server::errorMsg(User * user, int code) {
 	//:<serv_name> <error_code> <nickname> :<message>
 
-	if (user) {
-		std::string rplErr = ":" + this->getName() + " " + toString(code) + " " + user->getNickName() + " :" + _errors[code] + "\r\n";
-		send (user->getFd(), rplErr.c_str(), rplErr.length(), MSG);
+	std::string rplErr = ":" + this->getName() + " " + toString(code);
+	if (!user->getNickName().empty()) {
+		rplErr += " " + user->getNickName();
 	}
+	rplErr += " :" + _errors[code] + "\r\n";
+	send (user->getFd(), rplErr.c_str(), rplErr.length(), MSG);
 }
 
 void	Server::dealCommand(std::vector<std::string> argv, User *user) {
@@ -683,7 +700,7 @@ void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 	else if (argv[0] == "MODE") {
 		this->mode(argv, user);
 	}
-	else if (argv[0] != "CAP" && argv[0] != "WHO") {
+	else if (argv[0] != "CAP" && argv[0] != "WHO" && argv[0] != "USERHOST") {
 		this->errorMsg(user, 421);
 	}
 }
@@ -812,9 +829,7 @@ bool	Server::isRunning(void) const {
 //--------------------------------------------------
 //setters
 void	Server::setPassword(const std::string &password) {
-	if (isValidPassword(password)) {
-		this->_password = password;
-	}
+	this->_password = password;
 }
 
 void	Server::stop(void) {
