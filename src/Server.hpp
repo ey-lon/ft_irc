@@ -5,6 +5,8 @@
 #include <arpa/inet.h>
 #include <poll.h>
 
+#include "Errors.hpp"
+
 class Channel;
 
 class User;
@@ -27,14 +29,16 @@ class Server
 		std::map<int, User *>				_users;
 		std::vector<pollfd>					_fds;
 
+		Errors								_errors;
+
 		//communication
 		void				channelMegaphone(Channel * channel, User * user, const std::string & msg) const;
 		void				serverMegaphone	(User * user, const std::string & msg) const;
 		void				joinMsg			(Channel * channel, User * user);
 		void				welcomeMsg		(User * user);
+		void				errorMsg		(User * user, int code);
 		void				dealCommand		(std::vector<std::string> argv, User * user);
 		int					dealMessage		(int userFd);
-		void				newConnection	(void);
 
 		//commands
 		void				pass			(std::vector<std::string> argv, User * user);

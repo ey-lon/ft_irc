@@ -3,6 +3,12 @@
 #include <cstdlib>
 #include <climits>
 
+std::string	toString(int n) {
+	std::stringstream ss;
+	ss << n;
+	return (ss.str());
+}
+
 std::string strTrim(const std::string & s) {
 	std::string str = s;
 	size_t i = 0;

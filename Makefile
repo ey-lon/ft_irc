@@ -19,7 +19,8 @@ SRC =	main.cpp \
 		Server.cpp \
 		Channel.cpp \
 		User.cpp \
-		Utils.cpp
+		Utils.cpp \
+		Errors.cpp
 
 #----------------------------------------------
 #OBJECT FILES

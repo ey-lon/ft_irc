@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <climits>
 #include <iostream>
-#include <sstream>
 #include <string>
 
 #define MSG (MSG_DONTWAIT | MSG_NOSIGNAL)
@@ -74,10 +73,10 @@ void	Server::pass(std::vector<std::string> argv, User * user) {
 		; //error: user is already verified
 	}
 	else if (argv.size() < 2) {
-		; //error: user didn't provide password
+		this->errorMsg(user, 464); //error: user didn't provide password
 	}
 	else if (argv[1] != this->_password) {
-		; //error: password doesn't match
+		this->errorMsg(user, 464); //error: password doesn't match
 	}
 	else {
 		user->verify();
@@ -90,19 +89,22 @@ void	Server::pass(std::vector<std::string> argv, User * user) {
 void	Server::user(std::vector<std::string> argv, User * user) {
 	//USER <username>
 	if (!user->isVerified()) {
-		; //error: user isn't verified
+		this->errorMsg(user, 464); //error: user isn't verified
 	}
-	if (user->isAuthenticated()) {
-		; //error: user is already authenticated
+	else if (user->isAuthenticated()) {
+		this->errorMsg(user, 462); //error: user is already authenticated
 	}
 	else if (argv.size() < 2) {
-		; //error: user didn't provide username
+		this->errorMsg(user, 461); //error: user didn't provide username
 	}
 	else if (!user->getUserName().empty()) {
 		; //error: cannot change username
 	}
 	else if (getUserByUserName(argv[1])) {
-		; //error: user already exists
+		this->errorMsg(user, 400); //error: user already exists
+	}
+	else if (!isValidName(argv[1])) {
+		this->errorMsg(user, 468); //error: invalid username
 	}
 	else {
 		user->setUserName(argv[1]);
@@ -116,13 +118,16 @@ void	Server::user(std::vector<std::string> argv, User * user) {
 void	Server::nick(std::vector<std::string> argv, User * user) {
 	//NICK <nickname>
 	if (!user->isVerified()) {
-		; //error: user isn't verified
+		this->errorMsg(user, 464); //error: user isn't verified
 	}
-	if (argv.size() < 2) {
-		; //error: user didn't provide nickname
+	else if (argv.size() < 2) {
+		this->errorMsg(user, 431); //error: user didn't provide nickname
 	}
 	else if (getUserByNickName(argv[1])) {
-		; //error: user already exists
+		this->errorMsg(user, 433); //error: user already exists
+	}
+	else if (!isValidName(argv[1])) {
+		this->errorMsg(user, 432); //error: invalid nickname
 	}
 	else {
 		std::string rplNick = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " " + argv[1] + "\r\n";
@@ -130,7 +135,7 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 		if (user->isAuthenticated()) {
 			this->serverMegaphone(NULL, rplNick);
 		}
-		if (!user->isAuthenticated() && !user->getUserName().empty()) {
+		else if (!user->getUserName().empty()) {
 			user->authenticate();
 			this->welcomeMsg(user);
 		}
@@ -142,29 +147,45 @@ void	Server::nick(std::vector<std::string> argv, User * user) {
 void	Server::privmsg(std::vector<std::string> argv, User * user) {
 	//PRIVMSG <nickname/channel> <message>
 	if (!user->isAuthenticated()) {
+		this->errorMsg(user, 451);
 		return; //error: user isn't authenticated
 	}
-	if (argv.size() < 3) {
-		return ; //error: user didn't provide destination and/or message
+	if (argv.size() < 2) {
+		this->errorMsg(user, 461);
+		return ; //error: user didn't provide destination
+	}
+	if (argv.size() < 3 || argv[2].empty()) {
+		this->errorMsg(user, 412);
+		return ; //error: user didn't provide message
 	}
 	std::string	destName = argv[1];
 	std::string msgText = argv[2];
-	if (!msgText.empty()) {
-		msgText = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " " + destName + " :" + msgText + "\r\n";
-		if (destName[0] == '#') {
-			//send msg to all user of channel
-			destName.erase(0, 1);
-			Channel * channelDest = this->getChannelByName(destName);
-			if (channelDest) {
-				this->channelMegaphone(channelDest, user, msgText);
-			}
+	msgText = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " " + destName + " :" + msgText + "\r\n";
+	if (destName[0] == '#') {
+		//send msg to all user of channel
+		destName.erase(0, 1);
+		Channel * channelDest = this->getChannelByName(destName);
+		if (!channelDest) {
+			this->errorMsg(user, 403); //error: channel doesn't exist
+		}
+		else if (!channelDest->getUserByNickName(user->getNickName())) {
+			this->errorMsg(user, 442); //error: user not in channel
 		}
 		else {
-			//send message to user
-			User * userDest = this->getUserByNickName(destName);
-			if (userDest && userDest->isAuthenticated() && userDest != user) {
-				send(userDest->getFd(), msgText.c_str(), msgText.length(), MSG);
-			}
+			this->channelMegaphone(channelDest, user, msgText);
+		}
+	}
+	else {
+		//send message to user
+		User * userDest = this->getUserByNickName(destName);
+		if (!userDest) {
+			this->errorMsg(user, 401); //error: user_to_text not found
+		}
+		else if (!userDest->isAuthenticated()) {
+			; //error: user_to_text isn't authenticated
+		}
+		else if (userDest != user) {
+			send(userDest->getFd(), msgText.c_str(), msgText.length(), MSG);
 		}
 	}
 }
@@ -172,9 +193,11 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 void	Server::join(std::vector<std::string> argv, User * user) {
 	//JOIN <ch1,ch2,...,chn> [<key1,key2,...,keyn>]
 	if (!user->isAuthenticated()) {
+		this->errorMsg(user, 451);
 		return; //error: user isn't authenticated
 	}
 	if (argv.size() < 2) {
+		this->errorMsg(user, 461);
 		return; //error: user didn't provide channel(s)
 	}
 	std::vector<std::string> channelVec = splitString(argv[1], ',');	// <-- split into channel vector
@@ -189,16 +212,16 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 		Channel * channel = getChannelByName(channelVec[i]);
 		if (channel) {	// <-- channel exists
 			if (channel->getUserByNickName(user->getNickName())) {
-				;//user is already in channel
+				this->errorMsg(user, 443); //error: user is already in channel
 			}
 			else if (channel->hasFlag('i')) {
-				;//error: channel is invite only
+				this->errorMsg(user, 473); //error: channel is invite only
 			}
 			else if (channel->hasFlag('k') && (i >= keyVec.size() || channel->getPassword() != keyVec[i])) {
-				;//error: password needed, user didn't send it or it doesn't match
+				this->errorMsg(user, 475); //error: password needed, user didn't send it or it doesn't match
 			}
 			else if (channel->hasFlag('l') && channel->nUsers() >= channel->getUsersLimit()) {
-				;//error: too many users
+				this->errorMsg(user, 471); //error: too many users
 			}
 			else { //user can join
 				channel->addUser(user);
@@ -216,7 +239,7 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 					channel->addMode('k');
 				}
 				else {
-					; // error: invalid password <-- won't create channel
+					this->errorMsg(user, 400); // error: invalid password <-- won't create channel
 				}
 			}
 			else {
@@ -229,7 +252,7 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 			}
 		}
 		else {
-			; //error: channel doesn't exist but user provided invalid name 
+			this->errorMsg(user, 403); //error: channel doesn't exist but user provided invalid name 
 		}
 	}
 }
@@ -237,17 +260,25 @@ void	Server::join(std::vector<std::string> argv, User * user) {
 void	Server::part(std::vector<std::string> argv, User * user) {
 	//PART <channel> [<message>]
 	if (!user->isAuthenticated()) {
-		return; //error: user isn't authenticated
+		this->errorMsg(user, 451); //error: user isn't authenticated
+		return;
 	}
 	if (argv.size() < 2) {
-		return ; //error: user did't provide channel
+		this->errorMsg(user, 461); //error: user did't provide channel
+		return ;
 	}
 	std::string channelName = argv[1];
 	if (channelName[0] == '#') {
 		channelName.erase(0, 1);
 	}
 	Channel * channel = this->getChannelByName(channelName);
-	if (channel && channel->getUserByNickName(user->getNickName())) {
+	if (!channel) {
+		this->errorMsg(user, 403); //error: user did't provide channel
+	}
+	else if (!channel->getUserByNickName(user->getNickName())) {
+		this->errorMsg(user, 442); //error: user not in channel
+	}
+	else {
 		std::string rplMsg = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName;
 		if (argv.size() > 2) {
 			rplMsg += " :" + argv[2] + "\r\n";
@@ -255,9 +286,6 @@ void	Server::part(std::vector<std::string> argv, User * user) {
 		rplMsg += "\r\n";
 		this->channelMegaphone(channel, NULL, rplMsg);
 		channel->removeUser(user->getNickName());
-	}
-	else {
-		; // error: channel doesn't exist or user is not in channel
 	}
 }
 
@@ -288,20 +316,25 @@ void	Server::ping(std::vector<std::string> argv, User * user) {
 void	Server::kick(std::vector<std::string> argv, User * user) {
 	//KICK <#channel> <nickname> [<message>]
 	if (!user->isAuthenticated()) {
-		return; //error: user isn't authenticated
+		this->errorMsg(user, 451); //error: user isn't authenticated
+		return;
 	}
 	if (argv.size() < 3) {
-		return ; //error: user didn't provide channel and/or nickname
+		this->errorMsg(user, 461); //error: user didn't provide channel and/or nickname
+		return ;
 	}
 	std::string channelName = argv[1];
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
 		channelName.erase(0, 1); // remove #
 	}
 	Channel * channel = getChannelByName(channelName);
-	if (channel) {
+	if (!channel) {
+		this->errorMsg(user, 403);
+	}
+	else {
 		std::string nickName = argv[2];
 		if (!channel->isUserOperator(user->getNickName())) {
-			; //error: user is not operator
+			this->errorMsg(user, 482); //error: user is not operator
 		}
 		else {
 			std::string rplKick = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channelName + " " + argv[2];
@@ -318,85 +351,54 @@ void	Server::kick(std::vector<std::string> argv, User * user) {
 void	Server::invite(std::vector<std::string> argv, User * user) {
 	//INVITE <nickname> <channel>
 	if (!user->isAuthenticated()) {
-		return ; //error: user isn't authenticated
+		this->errorMsg(user, 451); //error: user isn't authenticated
+		return ;
 	}
 	if (argv.size() < 3) {
-		return ; //error: user didn't provide nickname and/or channel 
+		this->errorMsg(user, 461); //error: user didn't provide nickname and/or channel 
+		return ;
 	}
 	std::string channelName = argv[2];
 	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
 		channelName.erase(0, 1); // remove #
 	}
 	Channel * channel = this->getChannelByName(channelName);
-	if (channel) {
-		if (!channel->isUserOperator(user->getNickName())) {
-			; //error: user is not operator
-		}
-		else if (channel->hasFlag('l') && channel->nUsers() >= channel->getUsersLimit()) {
-			; //error: too many users
-		}
-		else {
-			std::string nickName = argv[1];
-			User * userInv = getUserByNickName(nickName);
-			if (userInv && userInv->isAuthenticated()) {
-				channel->addUser(userInv);
-				this->joinMsg(channel, userInv);
-			}
-			else {
-				; //error: user_to_invite not found or isn't authenticated
-			}			
-		}
+	if (!channel) {
+		this->errorMsg(user, 403); //error: channel not found
+	}
+	else if (!channel->isUserOperator(user->getNickName())) {
+		this->errorMsg(user, 482); //error: user is not operator
+	}
+	else if (channel->hasFlag('l') && channel->nUsers() >= channel->getUsersLimit()) {
+		this->errorMsg(user, 471); //error: too many users
 	}
 	else {
-		; //error: channel not found
+		std::string nickName = argv[1];
+		User * userInv = getUserByNickName(nickName);
+		if (!userInv) {
+			this->errorMsg(user, 401); //error: user_to_invite not found
+		}
+		else if (!userInv->isAuthenticated()) {
+			; //error: user_to_invite isn't authenticated
+		}
+		else if (channel->getUserByNickName(nickName)) {
+			this->errorMsg(user, 443); //error :user_to_invite is already in channel
+		}
+		else {
+			channel->addUser(userInv);
+			this->joinMsg(channel, userInv);
+		}			
 	}
 }
 
 void	Server::topic(std::vector<std::string> argv, User * user) {
 	//TOPIC <channel> [<topic>]
 	if (!user->isAuthenticated()) {
-		return; //error: user isn't authenticated
+		this->errorMsg(user, 451); //error: user isn't authenticated
+		return;
 	}
 	if (argv.size() < 2) {
-		return ; //error: user didn't provide channel
-	}
-	std::string channelName = argv[1];
-	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
-		channelName.erase(0, 1); // remove #
-	}
-	Channel * channel = this->getChannelByName(channelName);
-	if (channel) {
-		if (channel->hasFlag('t') && !channel->isUserOperator(user->getNickName())) {
-			; //error: restrictions are set but user is not operator
-		}
-		else if (argv.size() > 2) {
-			channel->setTopic(argv[2]);
-			std::string rplTopic;
-			rplTopic = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
-			this->channelMegaphone(channel, NULL, rplTopic);
-		}
-		else {
-			std::string rplTopic;
-			if (channel->getTopic().empty()) {
-				rplTopic = ":" + this->getName() + " 331 " + user->getNickName() + " #" + channel->getName() + " :No topic is set" + "\r\n";
-			}
-			else {
-				rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
-			}
-			send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
-		}
-	}
-	else {
-		; //error: channel not found
-	}
-}
-
-void	Server::mode(std::vector<std::string> argv, User * user) {
-	//MODE <channel> {[+|-]|i|t|k|o|l} [<user>] [<limit>] [<password>]
-	if (!user->isAuthenticated()) {
-		return; //error: user isn't authenticated
-	}
-	if (argv.size() < 3) { //user didn't send channel or flags
+		this->errorMsg(user, 461); //error: user didn't send channel
 		return ;
 	}
 	std::string channelName = argv[1];
@@ -405,13 +407,52 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 	}
 	Channel * channel = this->getChannelByName(channelName);
 	if (!channel) {
-		; //error: channel not found
+		this->errorMsg(user, 403); //error: channel not found
+	}
+	else if (channel->hasFlag('t') && !channel->isUserOperator(user->getNickName())) {
+		this->errorMsg(user, 482); //error: restrictions are set but user is not operator
+	}
+	else if (argv.size() > 2) { 		//<-- set topic
+		channel->setTopic(argv[2]);
+		std::string rplTopic;
+		rplTopic = ":" + user->getNickName() + "!" + this->getName() + " " + argv[0] + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+		this->channelMegaphone(channel, NULL, rplTopic);
+	}
+	else {								//<-- view topic
+		std::string rplTopic;
+		if (channel->getTopic().empty()) {
+			rplTopic = ":" + this->getName() + " 331 " + user->getNickName() + " #" + channel->getName() + " :No topic is set" + "\r\n";
+		}
+		else {
+			rplTopic = ":" + this->getName() + " 332 " + user->getNickName() + " #" + channel->getName() + " :" + channel->getTopic() + "\r\n";
+		}
+		send(user->getFd(), rplTopic.c_str(), rplTopic.length(), MSG);
+	}
+}
+
+void	Server::mode(std::vector<std::string> argv, User * user) {
+	//MODE <channel> {[+|-]|i|t|k|o|l} [<user>] [<limit>] [<password>]
+	if (!user->isAuthenticated()) {
+		this->errorMsg(user, 451); //error: user isn't authenticated
+		return;
+	}
+	if (argv.size() < 3) {
+		this->errorMsg(user, 461); //error: user didn't send channel or flags
+		return ;
+	}
+	std::string channelName = argv[1];
+	if (channelName[0] == '#') { // <-- if there's no # symbol then error?
+		channelName.erase(0, 1); // remove #
+	}
+	Channel * channel = this->getChannelByName(channelName);
+	if (!channel) {
+		this->errorMsg(user, 403); //error: channel not found
 	}
 	else if (!channel->isUserOperator(user->getNickName())) {
-		; //error: user is not operator
+		this->errorMsg(user, 482); //error: user is not operator
 	}
 	else if (argv[2][0] != '+' && argv[2][0] != '-') {
-		; //error: flags dont start with +/-
+		this->errorMsg(user, 472); //error: flags dont start with +/-
 	}
 	else {
 		std::string flags = argv[2];
@@ -430,12 +471,12 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 						this->channelMegaphone(channel, NULL, rplMsg);
 					}
 					else {
-						; //error: user not in channel
+						this->errorMsg(user, 441); //error: user not in channel
 					}
 					argIndex++;
 				}
 				else {
-					; //error: missing nickname
+					this->errorMsg(user, 461); //error: missing nickname
 				}
 			}
 			else if (flags[i] == 'l') {
@@ -448,12 +489,12 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 							this->channelMegaphone(channel, NULL, rplMsg);
 						}
 						else {
-							; //error: invalid users_limit
+							this->errorMsg(user, 400); //error: invalid users_limit
 						}
 						argIndex++;
 					}
 					else {
-						; //error: missing users_limit
+						this->errorMsg(user, 461); //error: missing users_limit
 					}
 				}
 				else {
@@ -472,12 +513,12 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 							this->channelMegaphone(channel, NULL, rplMsg);
 						}
 						else {
-							; //error: invalid password
+							this->errorMsg(user, 400); //error: invalid password
 						}
 						argIndex++;
 					}
 					else {
-						; //error: missing password
+						this->errorMsg(user, 461); //error: missing password
 					}
 				}
 				else {
@@ -497,7 +538,7 @@ void	Server::mode(std::vector<std::string> argv, User * user) {
 				this->channelMegaphone(channel, NULL, rplMsg);
 			}
 			else {
-				; //error: unknown flag
+				this->errorMsg(user, 401); //error: unknown flag
 			}
 		}
 	}
@@ -555,9 +596,7 @@ void Server::joinMsg(Channel *channel, User *user) {
     std::string rplMode = ":" + this->getName() + " 324 " + user->getNickName() + " #" + channel->getName() + " +" + channel->getMode();
 	for (size_t i = 0; i < channel->getMode().length(); ++i) {
 		if (channel->getMode()[i] == 'l') {
-			std::stringstream ss;
-			ss << channel->getUsersLimit();
-			rplMode += " " + ss.str();
+			rplMode += " " + toString(channel->getUsersLimit());
 		}
 		if (channel->getMode()[i] == 'k' && channel->getPassword().length() > 0) {
 			rplMode += " " + channel->getPassword();
@@ -593,6 +632,15 @@ void	Server::welcomeMsg(User * user) {
 	send(fd, RPL_ISUPPORT.c_str(), RPL_ISUPPORT.length(), MSG);
 	send(fd, RPL_MOTD.c_str(), RPL_MOTD.length(), MSG);
 	send(fd, RPL_ENDOFMOTD.c_str(), RPL_ENDOFMOTD.length(), MSG);
+}
+
+void	Server::errorMsg(User * user, int code) {
+	//:<serv_name> <error_code> <nickname> :<message>
+
+	if (user) {
+		std::string rplErr = ":" + this->getName() + " " + toString(code) + " " + user->getNickName() + " :" + _errors[code] + "\r\n";
+		send (user->getFd(), rplErr.c_str(), rplErr.length(), MSG);
+	}
 }
 
 void	Server::dealCommand(std::vector<std::string> argv, User *user) {
@@ -634,6 +682,9 @@ void	Server::dealCommand(std::vector<std::string> argv, User *user) {
 	}
 	else if (argv[0] == "MODE") {
 		this->mode(argv, user);
+	}
+	else if (argv[0] != "CAP" && argv[0] != "WHO") {
+		this->errorMsg(user, 421);
 	}
 }
 
