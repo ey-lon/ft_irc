@@ -10,7 +10,10 @@ class Channel
 		std::string							_password;
 		std::string							_topic;
 		std::string							_mode;
-		std::map <User *, bool>				_users;
+
+		std::map<std::string, bool>			_users;
+		//std::vector<std::string>			_bannedUsers;
+
 		int									_usersLimit;
 
 		Channel(void);
@@ -20,7 +23,7 @@ class Channel
 		~Channel(void);
 		
 		//getters
-		const std::map <User *, bool> &	getUsers(void) const;
+		const std::map <std::string, bool> &	getUsers(void) const;
 		const std::string	getName(void) const;
 		const std::string	getPassword(void) const;
 		const std::string	getTopic(void) const;
@@ -40,10 +43,11 @@ class Channel
 		void				removeMode(char flag);
 
 		//users
-		User *				getUserByNickName(const std::string & nickName) const;
+		bool				isUserPresent(const std::string & nickName) const;
 		bool				isUserOperator(const std::string & nickName) const;
 		
-		void				addUser(User *user);
+		void				addUser(const std::string & nickname);
+		void				updateNick(const std::string & oldNick, const std::string & newNick);
 		void				removeUser(const std::string & nickName);
 		void				promoteUser(const std::string & nickName);
 		void				demoteUser(const std::string & nickName);

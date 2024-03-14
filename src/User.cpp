@@ -11,9 +11,9 @@ User::~User() {
 }
 
 User::User(int fd) : _isAuthenticated(false), _isVerified(false) {
-	_pollFd.fd = fd;
-	_pollFd.events = POLLIN;
-	_pollFd.revents = 0;
+	this->_fd = fd;
+	//_pollFd.events = POLLIN;
+	//_pollFd.revents = 0;
 }
 
 //--------------------------------------------------
@@ -26,21 +26,10 @@ bool	User::isVerified(void) const {
 	return (this->_isVerified);
 }
 
-pollfd	User::getPollFd(void) const {
-	return (this->_pollFd);
-}
-
 int	User::getFd(void) const {
-	return (this->_pollFd.fd);
+	return (this->_fd);
 }
 
-short	User::getEvents(void) const {
-	return (this->_pollFd.events);
-}
-
-short	User::getRevents(void) const {
-	return (this->_pollFd.revents);
-}
 
 const std::string &	User::getUserName(void) const {
 	return (this->_userName);

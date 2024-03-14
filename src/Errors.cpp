@@ -4,7 +4,7 @@ Errors::Errors(void) : _unknownErr("unknown error") {
 	_errors[400] = "Invalid input";
 	_errors[401] = "No such nickname";
 	_errors[402] = "No such server";
-	_errors[403] = "No such channel or invalid channel name";
+	_errors[403] = "No such channel";
 	_errors[404] = "Cannot send to channel";
 	_errors[405] = "You have joined too many channels";
 	_errors[406] = "There was no such nickname";
@@ -30,7 +30,7 @@ Errors::Errors(void) : _unknownErr("unknown error") {
 	_errors[461] = "Not enough parameters";
 	_errors[462] = "You may not reregister";
 	_errors[463] = "Your host isn't among the privileged";
-	_errors[464] = "Password incorrect or required";
+	_errors[464] = "Password incorrect and/or required";
 	_errors[465] = "You are banned from this server";
 	_errors[466] = "You will be banned";
 	_errors[467] = "Channel key already set";

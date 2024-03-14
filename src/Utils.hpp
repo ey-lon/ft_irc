@@ -1,6 +1,9 @@
 #include <iostream>
 #include <vector>
 
+std::string					lowerStr	(const std::string &);
+std::string					upperStr	(const std::string &);
+
 std::string					toString	(int);
 std::string					strTrim		(const std::string &);
 std::vector<std::string>	splitString	(const std::string &);

@@ -57,6 +57,14 @@ std::string	upperStr(const std::string & input) {
 	return (result);
 }
 
+std::string	lowerStr(const std::string & input) {
+	std::string result = input;
+	for (size_t i = 0; i < result.length(); ++i) {
+		result[i] = std::tolower(result[i]);
+	}
+	return (result);
+}
+
 std::vector<std::string>	parseInput(const std::string & input) {
 	std::string	str = input;
 	size_t colonPos = str.find(':');

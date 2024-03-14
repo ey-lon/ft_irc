@@ -9,9 +9,8 @@ class User
 	private:
 		std::string							_userName;
 		std::string							_nickName;
-		//std::map<std::string, Channel *>	_channels;
 
-		pollfd								_pollFd;
+		int									_fd;
 		bool								_isAuthenticated;
 		bool								_isVerified;
 		std::string							_message;

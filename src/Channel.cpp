@@ -7,9 +7,7 @@ Channel::Channel(void) : _usersLimit(0) {}
 
 Channel::Channel(const std::string & channelName) : _name(channelName), _usersLimit(0) {}
 
-Channel::~Channel(void) {
-	_users.clear();
-}
+Channel::~Channel(void) {}
 
 //--------------------------------------------------
 // getters
@@ -41,9 +39,10 @@ bool	Channel::hasFlag(char flag) const {
 	return (this->_mode.find(flag) != std::string::npos);
 }
 
-const std::map <User *, bool> &	Channel::getUsers(void) const {
+const std::map <std::string, bool> &	Channel::getUsers(void) const {
 	return (this->_users);
 }
+
 
 //--------------------------------------------------
 //setters
@@ -95,36 +94,37 @@ void	Channel::removeMode(char flag) {
 
 //--------------------------------------------------
 //users
-User *	Channel::getUserByNickName(const std::string & nickName) const {
-	std::map<User *, bool>::const_iterator it = _users.begin();
-	while (it != this->_users.end() && it->first->getNickName() != nickName) {
-		++it;
-	}
-	if (it != this->_users.end()) {
-		return (it->first);
-	}
-	else {
-		return (NULL);
-	}
+
+bool	Channel::isUserPresent(const std::string & nickName) const {
+	return (_users.find(nickName) != this->_users.end());
 }
 
 bool	Channel::isUserOperator(const std::string & nickName) const {
-	std::map<User *, bool>::const_iterator it = _users.begin();
-	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+	std::map<std::string, bool>::const_iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
 		++it;
 	}
 	return (it != this->_users.end() && it->second);
 }
 
-void	Channel::addUser(User * user) {
-	if (user && this->_users.find(user) == this->_users.end()) 	{
-		this->_users.insert(std::make_pair(user, false));
+void	Channel::addUser(const std::string & nickname) {
+
+	if (this->_users.find(nickname) == this->_users.end()) 	{
+		this->_users.insert(std::make_pair(nickname, false));
+	}
+}
+
+void	Channel::updateNick(const std::string & oldNick, const std::string & newNick) {
+	std::map<std::string, bool>::iterator it = this->_users.find(oldNick);
+	if (it != this->_users.end()) {
+		this->_users.insert(std::make_pair(newNick, it->second));
+		this->_users.erase(it);
 	}
 }
 
 void	Channel::removeUser(const std::string & nickName) {
-	std::map<User *, bool>::iterator it = _users.begin();
-	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+	std::map<std::string, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
 		++it;
 	}
 	if (it != _users.end()) {
@@ -133,8 +133,8 @@ void	Channel::removeUser(const std::string & nickName) {
 }
 
 void	Channel::promoteUser(const std::string & nickName) {
-	std::map<User *, bool>::iterator it = _users.begin();
-	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+	std::map<std::string, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
 		++it;
 	}
 	if (it != _users.end()) {
@@ -143,8 +143,8 @@ void	Channel::promoteUser(const std::string & nickName) {
 }
 
 void	Channel::demoteUser(const std::string & nickName) {
-	std::map<User *, bool>::iterator it = _users.begin();
-	while (it != this->_users.end() && it->first->getNickName() != nickName) {
+	std::map<std::string, bool>::iterator it = _users.begin();
+	while (it != this->_users.end() && it->first != nickName) {
 		++it;
 	}
 	if (it != _users.end()) {
