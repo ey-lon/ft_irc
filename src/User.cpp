@@ -12,8 +12,6 @@ User::~User() {
 
 User::User(int fd) : _isAuthenticated(false), _isVerified(false) {
 	this->_fd = fd;
-	//_pollFd.events = POLLIN;
-	//_pollFd.revents = 0;
 }
 
 //--------------------------------------------------

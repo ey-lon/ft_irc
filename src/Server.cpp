@@ -198,12 +198,12 @@ void	Server::privmsg(std::vector<std::string> argv, User * user) {
 void	Server::join(std::vector<std::string> argv, User * user) {
 	//JOIN <ch1,ch2,...,chn> [<key1,key2,...,keyn>]
 	if (!user->isAuthenticated()) {
-		this->errorMsg(user, 451);
-		return; //error: user isn't authenticated
+		this->errorMsg(user, 451); //error: user isn't authenticated
+		return;
 	}
 	if (argv.size() < 2) {
-		this->errorMsg(user, 461);
-		return; //error: user didn't provide channel(s)
+		this->errorMsg(user, 461); //error: user didn't provide channel(s)
+		return;
 	}
 	std::vector<std::string> channelVec = splitString(argv[1], ',');	// <-- split into channel vector
 	std::vector<std::string> keyVec;
@@ -943,12 +943,6 @@ User *	Server::createUser() {
 
 void	Server::removeUser(int userFd) {
 	if (this->_users.find(userFd) != this->_users.end()) {
-
- 		//remove user from channels
-		/* std::string nickName = this->getUserByFd(userFd)->getNickName();
-		for (std::map<std::string, Channel *>::iterator it = _channels.begin(); it != _channels.end(); it++) {
-			it->second->removeUser(nickName);
-		} */
 
 		delete (this->_users[userFd]);								// <-- delete User *
 		this->_users.erase(userFd);									// <-- remove user from map

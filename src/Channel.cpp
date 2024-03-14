@@ -108,7 +108,6 @@ bool	Channel::isUserOperator(const std::string & nickName) const {
 }
 
 void	Channel::addUser(const std::string & nickname) {
-
 	if (this->_users.find(nickname) == this->_users.end()) 	{
 		this->_users.insert(std::make_pair(nickname, false));
 	}
