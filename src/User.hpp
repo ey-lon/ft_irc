@@ -24,10 +24,7 @@ class User
 		//getters
 		bool				isAuthenticated(void) const;
 		bool				isVerified(void) const;
-		pollfd				getPollFd(void) const;
 		int					getFd(void) const;
-		short				getEvents(void) const;
-		short				getRevents(void) const;
 		
 		const std::string &	getUserName(void) const;
 		const std::string &	getNickName(void) const;
