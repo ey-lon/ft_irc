@@ -773,43 +773,39 @@ void	Server::run(void) {
 
 void	Server::init(void) {
 	// Create a socket
-	_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (_serverSocket == -1) {
+	this->_serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (this->_serverSocket == -1) {
 		throw ("socket creation failure");
     }
-	// Set socket options
+	// Set socket options (SO_REUSEADDR)
     int opt = 1;
-    if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+    if (setsockopt(this->_serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
         throw ("socket option settings failure");
     }
-	int recicle = -1;
-	if (setsockopt(_serverSocket, SOL_SOCKET, SO_REUSEADDR, &recicle, sizeof(recicle)) == -1) {
-		throw ("socket reusable settings failure");
-	}
 	// Get hostname
-	if (gethostname(_hostname, sizeof(_hostname)) == -1) {
+	if (gethostname(this->_hostname, sizeof(this->_hostname)) == -1) {
 		throw ("gethostname failure");
 	}
 	// Get ip
-	struct hostent *host_entry = gethostbyname(_hostname);
+	struct hostent *host_entry = gethostbyname(this->_hostname);
 	if (host_entry == NULL) {
 		throw ("gethostbyname failure");
 	}
-	_ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
+	this->_ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
     // Set up server address structure
-	_serverAddress.sin_family = AF_INET;
-    _serverAddress.sin_addr.s_addr = INADDR_ANY;	// Listen on all available interfaces
-    _serverAddress.sin_port = htons(this->_port);
-	// Controls on fd
-	if (fcntl(_serverSocket, F_SETFL, O_NONBLOCK) < 0) {
+	this->_serverAddress.sin_family = AF_INET;
+    this->_serverAddress.sin_addr.s_addr = INADDR_ANY;	// Listen on all available interfaces
+    this->_serverAddress.sin_port = htons(this->_port);
+	// Set flag on fd (O_NONBLOCK)
+	if (fcntl(this->_serverSocket, F_SETFL, O_NONBLOCK) < 0) {
 		throw ("non-blocking socket setting failure");
 	}
 	// Bind the socket
-    if (bind(_serverSocket, (struct sockaddr*)&_serverAddress, sizeof(_serverAddress)) == -1) {
+    if (bind(this->_serverSocket, (struct sockaddr*)&(this->_serverAddress), sizeof(this->_serverAddress)) == -1) {
         throw ("socket binding failure");
     }
     // Listen for incoming connections
-    if (listen(_serverSocket, SOMAXCONN) == -1) {
+    if (listen(this->_serverSocket, SOMAXCONN) == -1) {
         throw ("socket listening failure");
     }
 }
