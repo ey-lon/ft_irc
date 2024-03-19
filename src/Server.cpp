@@ -643,9 +643,9 @@ void Server::joinMsg(Channel *channel, User *user) {
 void	Server::welcomeMsg(User * user) {
 	std::string nickname = user->getNickName();
 	std::string RPL_WELCOME =	":" + this->getName() + " 001 " + nickname + " :Welcome to the Internet Relay Network " + nickname + "\r\n";
-	std::string RPL_YOURHOST =	":" + this->getName() + " 002 " + nickname + " :Your host is " + this->_hostname + ", running version 42 \r\n";
+	std::string RPL_YOURHOST =	":" + this->getName() + " 002 " + nickname + " :Your host is " + this->_hostname + "\r\n";
 	std::string RPL_CREATED = 	":" + this->getName() + " 003 " + nickname + " :This server was created 10/03/2024\r\n";
-	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircserv 42 +o +l+i+k+t+n\r\n";
+	std::string RPL_MYINFO = 	":" + this->getName() + " 004 " + nickname + " ircserv 1 +o +l+i+k+t+n\r\n";
 	std::string RPL_ISUPPORT =	":" + this->getName() + " 005 " + nickname + " operator limit invite key topic :are supported by this server\r\n";
 	std::string RPL_MOTD =		":" + this->getName() + " 372 " + nickname + " :Welcome to " + this->getName() + "\r\n";
 	std::string RPL_ENDOFMOTD =	":" + this->getName() + " 376 " + nickname + " :End of MOTD command\r\n";
@@ -668,7 +668,7 @@ void	Server::errorMsg(User * user, int code) {
 		rplErr += " " + user->getNickName();
 	}
 	else {
-		rplErr += " you";
+		rplErr += " (you)";
 	}
 	rplErr += " :" + _errors[code] + "\r\n";
 	send (user->getFd(), rplErr.c_str(), rplErr.length(), MSG);
@@ -769,6 +769,7 @@ void	Server::run(void) {
 			}
 		}
 	}
+	//send message to clients?
 }
 
 void	Server::init(void) {
