@@ -20,7 +20,7 @@ To execute the *server*:
 | PASS | PASS \<password> | Insert password (necessary for authentication). |
 | USER | USER \<username> | Set username (necessary for authentication). |
 | NICK | NICK \<nickname> | Set/Change nickname (necessary for authentication). |
-| JOIN | JOIN \<ch1,ch2,...,chN> [\<key1,key2,...,keyN>] | Join/Create a channel. |
+| JOIN | JOIN \<ch1,ch2,...,chN> [\<key1,key2,...,keyN>] | Join/Create a channel with optional password. |
 | PART | PART \<channel> [\<message>] | Leave a channel. |
 | PRIVMSG | PRIVMSG \<nickname/channel> \<message> | Send a message to a specific user or to all the users in a specific channel. |
 | INVITE | INVITE \<nickname> \<channel> | Invite user to channel. |
