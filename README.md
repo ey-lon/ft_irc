@@ -26,7 +26,7 @@ To execute the *server*:
 | INVITE | INVITE \<nickname> \<channel> | Invite user to channel. |
 | TOPIC | TOPIC \<channel> [\<topic>] | View/Set topic of a channel. |
 | KICK | KICK \<#channel> \<nickname> [\<message>] | Kick user from a channel. |
-| MODE | MODE <channel> {[+\|-]\|i\|t\|k\|o\|l} [\<user>] [\<limit>] [\<password>] | Change settings of a channel. |
+| MODE | MODE <channel> {[+\|-]\|i\|t\|k\|o\|l} [\<user>] [\<limit>] [\<password>] | Change settings of a channel. <br> flags: <br> i -> add/remove invite-only mode. <br> t -> add/remove operators-only for TOPIC command. <br> k -> set/remove password. <br> o -> promote/demote user. <br> l -> add/remove users limit. |
 
 ## Ignored Commands
 | command |
