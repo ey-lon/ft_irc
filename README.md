@@ -4,7 +4,9 @@ My own IRC server.
 ## Usage
 | command | info |
 | ------- | ---- |
-| `make` | compile the the *server*. |
+| `make` | compile the *ircserv* executable. |
+| `make clean` | remove temporary files. |
+| `make fclean` | remove temporary and executable. |
 
 To execute the *server*:
 ```shell
