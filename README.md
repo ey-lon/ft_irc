@@ -7,6 +7,7 @@ My own IRC server.
 | `make` | compile the *ircserv* executable. |
 | `make clean` | remove temporary files. |
 | `make fclean` | remove temporary and executable. |
+| `make re` | force recompile. |
 
 To execute the *server*:
 ```shell
